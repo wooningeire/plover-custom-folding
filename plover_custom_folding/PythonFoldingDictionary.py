@@ -11,13 +11,14 @@ from .EngineGetterExtension import translator_container
 
 class PythonFoldingDictionary(StenoDictionary):
     readonly = True
-    longest_key = 5
 
     __lookups: Optional[list[Callable[[tuple[str], Translator], str]]]
     __looking_up = False
 
     def __init__(self):
         super().__init__()
+
+        self._longest_key = 8
 
     def _load(self, filepath: str):
         # SourceFileLoader because spec_from_file_location only accepts files with a `py` file extension
@@ -26,6 +27,8 @@ class PythonFoldingDictionary(StenoDictionary):
         spec.loader.exec_module(module)
         
         self.__lookups = module.lookups
+        if hasattr(module, "LONGEST_KEY"):
+            self._longest_key = module.LONGEST_KEY
 
     def __getitem__(self, key: tuple[str]) -> str:
         result = self.__lookup(key)
