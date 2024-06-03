@@ -1,3 +1,5 @@
+import importlib.util
+from importlib.machinery import SourceFileLoader
 from typing import Optional, Callable
 
 from plover.steno import Stroke
@@ -18,13 +20,12 @@ class PythonFoldingDictionary(StenoDictionary):
         super().__init__()
 
     def _load(self, filepath: str):
-        # https://github.com/openstenoproject/plover_python_dictionary/blob/master/plover_python_dictionary.py
-        with open(filepath) as file:
-            source = file.read()
+        # SourceFileLoader because spec_from_file_location only accepts files with a `py` file extension
+        spec = importlib.util.spec_from_loader(filepath, SourceFileLoader(filepath, filepath))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
         
-        module = {}
-        exec(source, module)
-        self.__lookups = module["lookups"]
+        self.__lookups = module.lookups
 
     def __getitem__(self, key: tuple[str]) -> str:
         result = self.__lookup(key)
