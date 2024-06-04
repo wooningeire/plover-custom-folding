@@ -54,7 +54,7 @@ class PythonFoldingDictionary(StenoDictionary):
         return result
     
     def __lookup(self, key: tuple[str]) -> Optional[str]:
-        strokes = [Stroke.from_steno(steno) for steno in key]
+        strokes = tuple(Stroke.from_steno(steno) for steno in key)
         for lookup in self.__rules.lookups:
             # Prevent a folding dictionary from looking up itself
             if lookup in self.__current_lookups:
