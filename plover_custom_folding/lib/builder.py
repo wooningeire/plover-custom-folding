@@ -15,7 +15,6 @@ class FoldingRules:
 
 
 _StrokeFilter = Callable[[tuple[Stroke, ...]], tuple[Stroke, ...]]
-_StrokePredicate = Callable[[tuple[Stroke, ...]], bool]
 
 def _toggle_substroke(stroke: Stroke, substroke: Stroke):
     if substroke in stroke:
@@ -35,6 +34,45 @@ def _create_stroke_index_mapping(strokes: tuple[Stroke, ...]):
         for i, stroke in enumerate(strokes)
     }
 
+class _Case:
+    def __init__(
+        self,
+        contained_substroke = _empty_stroke(),
+        toggled_substroke = _empty_stroke(),
+    ):
+        self.__contained_substroke = contained_substroke
+        self.__toggled_substroke = toggled_substroke
+
+    def satisfied_by(self, filtered_strokes: tuple[Stroke, ...]):
+        return all(self.__contained_substroke in stroke for stroke in filtered_strokes)
+    
+    def remove_fold(self, stroke: Stroke):
+        return _toggle_substroke(stroke - self.__contained_substroke, self.__toggled_substroke)
+    
+    @property
+    def fold_substroke(self):
+        return self.__contained_substroke + self.__toggled_substroke
+    
+    def __repr__(self):
+        return f"_Case(contained={self.__contained_substroke}, toggled={self.__toggled_substroke})"
+
+class _Condition:
+    def __init__(
+        self,
+        cases: tuple[_Case, ...]
+    ):
+        self.__cases = cases
+    
+    def first_case_satisfied_by(self, filtered_strokes: tuple[Stroke, ...]) -> "_Case | None":
+        """Returns the case which is satisfied by the given outline, or None if no such case exists."""
+        for case in self.__cases:
+            if case.satisfied_by(filtered_strokes):
+                return case
+        
+        return None
+    
+    def __repr__(self):
+        return f"_Condition(cases={self.__cases})"
 
 class _Clause:
     """Determines whether a chord has been folded into another, and what keys comprise that fold."""
@@ -42,68 +80,87 @@ class _Clause:
     def __init__(
         self,
         stroke_filter: _StrokeFilter,
-        stroke_predicate: _StrokePredicate = lambda stroke: True,
-        fold_substroke = _empty_stroke(),
-        
-        contained_substroke = _empty_stroke(),
-        toggled_substroke = _empty_stroke(),
+        conditions: tuple[_Condition, ...] = (),
     ):
         """A function that returns the strokes to test."""
         self.__stroke_filter = stroke_filter
-        """The condition to test on the strokes given by `stroke_filter`."""
-        self.__stroke_predicate = stroke_predicate
-        self.__fold_substroke = fold_substroke
+        self.__conditions = conditions
 
-        self.__contained_substroke = contained_substroke
-        self.__toggled_substroke = toggled_substroke
-
-        assert not _strokes_overlap(contained_substroke, toggled_substroke)
+        # assert not _strokes_overlap(contained_substroke, toggled_substroke)
 
 
-    def satisfied_by(self, strokes: tuple[Stroke, ...]):
-        return all(self.__stroke_predicate(stroke) for stroke in self.__stroke_filter(strokes))
+    def first_cases_satisfied_by(self, strokes: tuple[Stroke, ...]) -> "tuple[_Case, ...] | None":
+        """Returns a tuple of cases which are satisfied by the given outline for each condition, or None if any
+        condition fails."""
+        cases: list[_Case] = []
+        for condition in self.__conditions:
+            case = condition.first_case_satisfied_by(self.__stroke_filter(strokes))
+            if case is not None:
+                cases.append(case)
+            else:
+                return None
+            
+        return cases
     
 
-    def folds(self, substroke_steno: str) -> "_Clause":
-        substroke = Stroke.from_steno(substroke_steno)
+    def folds(self, *substrokes_steno: str) -> "_Clause":
+        substrokes = tuple(Stroke.from_steno(substroke_steno) for substroke_steno in substrokes_steno)
+        cases: list[_Case] = []
+        for substroke in sorted(substrokes, key=lambda substroke: len(substroke), reverse=True):
+            cases.append(_Case(
+                substroke,
+                _empty_stroke(),
+            ))
+
         return _Clause(
             self.__stroke_filter,
-            lambda stroke: self.__stroke_predicate(stroke) and substroke in stroke,
-            self.__fold_substroke + substroke,
-
-            self.__contained_substroke + substroke,
-            self.__toggled_substroke,
+            self.__conditions + (_Condition(tuple(cases)),),
         )
 
     fold = folds
 
-    def folds_toggled(self, substroke_steno: str) -> "_Clause":
-        substroke = Stroke.from_steno(substroke_steno)
+    def folds_toggled(self, *substrokes_steno: str) -> "_Clause":
+        substrokes = tuple(Stroke.from_steno(substroke_steno) for substroke_steno in substrokes_steno)
+        cases: list[_Case] = []
+        for substroke in sorted(substrokes, key=lambda substroke: len(substroke), reverse=True):
+            cases.append(_Case(
+                _empty_stroke(),
+                substroke,
+            ))
+
         return _Clause(
             self.__stroke_filter,
-            self.__stroke_predicate,
-            self.__fold_substroke + substroke,
-
-            self.__contained_substroke,
-            self.__toggled_substroke + substroke,
+            self.__conditions + (_Condition(tuple(cases)),),
         )
     
     fold_toggled = folds_toggled
     
     def remove_folds(self, strokes: tuple[Stroke, ...], *, stroke_index_mapping: "dict[Stroke, int] | None"=None):
+        cases = self.first_cases_satisfied_by(strokes)
+
         new_strokes = list(strokes)
         stroke_index_mapping = stroke_index_mapping or _create_stroke_index_mapping(strokes)
         for stroke in self.__stroke_filter(strokes):
-            new_strokes[stroke_index_mapping[stroke]] = _toggle_substroke(stroke - self.__contained_substroke, self.__toggled_substroke)
+            new_stroke = stroke
+            for case in cases:
+                new_stroke = case.remove_fold(new_stroke)
+            new_strokes[stroke_index_mapping[stroke]] = new_stroke
+
         return tuple(new_strokes)
     
     def get_folds(self, strokes: tuple[Stroke, ...], *, folds: "tuple[Stroke, ...] | None"=None, stroke_index_mapping: "dict[Stroke, int] | None"=None):
+        cases = self.first_cases_satisfied_by(strokes)
+
         new_folds = list(folds) if folds is not None else list(_empty_stroke() for _ in strokes)
         stroke_index_mapping = stroke_index_mapping or _create_stroke_index_mapping(strokes)
         for stroke in self.__stroke_filter(strokes):
-            new_folds[stroke_index_mapping[stroke]] += self.__fold_substroke
+            for case in cases:
+                new_folds[stroke_index_mapping[stroke]] += case.fold_substroke
+
         return tuple(new_folds)
         
+    def __repr__(self):
+        return f"_Clause(conditions={self.__conditions})"
 
 class _Prerequisite:
     """Bundles a group of `_Clause`s."""
@@ -111,8 +168,18 @@ class _Prerequisite:
     def __init__(self, clauses: tuple[_Clause]):
         self.__clauses = clauses
 
-    def satisfied_by(self, strokes: tuple[Stroke, ...]):
-        return all(clause.satisfied_by(strokes) for clause in self.__clauses)
+    def first_cases_satisfied_by(self, strokes: tuple[Stroke, ...]):
+        """Returns a tuple of tuples of cases which are satisfied by the given outline for each clause, or None if any
+        condition fails."""
+        cases_by_clause: list[_Case] = []
+        for clause in self.__clauses:
+            cases = clause.first_cases_satisfied_by(strokes)
+            if cases is not None:
+                cases_by_clause.append(cases)
+            else:
+                return None
+            
+        return cases_by_clause
     
     def remove_folds(self, strokes: tuple[Stroke, ...], *, stroke_index_mapping: "dict[Stroke, int] | None"=None):
         stroke_index_mapping = stroke_index_mapping or _create_stroke_index_mapping(strokes)
@@ -159,13 +226,18 @@ class _Rule:
         self.__additional_rules = additional_rules
 
     def __call__(self, strokes: tuple[Stroke, ...], translator: Translator) -> str:
-        if not self.__prerequisite.satisfied_by(strokes):
+        cases_by_clause = self.__prerequisite.first_cases_satisfied_by(strokes)
+        if cases_by_clause is None:
             raise KeyError
-        
+                
+
+        # Remove and get the folds in the outline
+
         stroke_index_mapping = _create_stroke_index_mapping(strokes)
 
         strokes_without_folds = self.__prerequisite.remove_folds(strokes, stroke_index_mapping=stroke_index_mapping)
         folds = self.__prerequisite.get_folds(strokes, stroke_index_mapping=stroke_index_mapping)
+
 
         for additional_rule in self.__additional_rules:
             try:
