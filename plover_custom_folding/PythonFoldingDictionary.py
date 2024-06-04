@@ -28,14 +28,14 @@ class PythonFoldingDictionary(StenoDictionary):
         self.__rules: "FoldingRules | None" = None
 
     def _load(self, filepath: str):
-        from .lib.builder import FoldingRules, FoldingRuleBuildHelper
+        from .lib.builder import FoldingRules, FoldingRuleBuildUtils
 
         # SourceFileLoader because spec_from_file_location only accepts files with a `py` file extension
         spec = importlib.util.spec_from_loader(filepath, SourceFileLoader(filepath, filepath))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         
-        assert isinstance(rules := module.init(FoldingRuleBuildHelper, FoldingRules), FoldingRules)
+        assert isinstance(rules := module.init(FoldingRuleBuildUtils, FoldingRules), FoldingRules)
         self.__rules = rules
         self._longest_key = rules.longest_key
 
