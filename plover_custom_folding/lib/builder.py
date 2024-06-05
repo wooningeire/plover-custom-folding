@@ -269,6 +269,7 @@ class FoldingRuleBuildUtils:
     def filtered_strokes(stroke_filter: _StrokeFilter):
         return _Clause(stroke_filter)
     
+    
     @staticmethod
     def modify_translation(modify_translation: Callable[[str], str]):
         """Translates the outline without any folds, and modifies the translation according to the callback."""
@@ -319,3 +320,14 @@ class FoldingRuleBuildUtils:
             return None
         
         return f"{fold_chord_translation} {foldless_translation}"
+    
+
+    @staticmethod
+    def default_rules():
+        """Plover's default folding rules, depend on the current system."""
+
+        from plover.system import SUFFIX_KEYS
+
+        f = FoldingRuleBuildUtils
+        return f.when(f.last_stroke.folds(*SUFFIX_KEYS)).then(f.unfold_suffix)
+    

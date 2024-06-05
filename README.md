@@ -16,8 +16,9 @@ from plover_custom_folding import f, Lookup
 
 # Required. A list of rules or lookup functions of type `Callable[[tuple[Stroke, ...], Translator], str]`.
 rules: list[Lookup] = [
-    # Plover's default suffix folding rules. Included so they take precedence over the custom rules below.
-    f.when(f.last_stroke.folds("-Z", "-D", "-S", "-G")).then(f.unfold_suffix),
+    # Plover's default suffix folding rules based on the current system. Included so they take precedence over the
+    # custom rules below.
+    f.default_rules(),
 
 
     # Allows the substrokes `-GS` or `-GZ` to be included in the last stroke to append "{^ings}".
@@ -32,7 +33,6 @@ rules: list[Lookup] = [
 
     # Allows the `#` key to be included in the first stroke to capitalize a word.
     # E.g., `#KAP/TAL` => `{-|}capital` ("Capital")
-    # Note: this is after the `^` rule because the order of "{^}" and "{-|}" in a translation matters.
     f.when(f.first_stroke.folds("#")).then(f.prepend_to_translation("{-|}")),
 
 
