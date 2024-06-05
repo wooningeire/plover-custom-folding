@@ -7,9 +7,7 @@ from plover.steno_dictionary import StenoDictionary
 
 from .EngineGetterExtension import translator_container
 
-# Need to import lazily because `Stroke` can't be instantiated immediately
-from .lib.types import Lookup
-# from .lib.builder import FoldingRules, FoldingRuleBuildHelper, Lookup
+from .lib.builder import Lookup
 
 
 class PythonFoldingDictionary(StenoDictionary):
@@ -18,26 +16,24 @@ class PythonFoldingDictionary(StenoDictionary):
     __current_lookups: set[Lookup] = set()
 
     def __init__(self):
-        from .lib.builder import FoldingRules
-
         super().__init__()
 
         """(override)"""
         self._longest_key = 8
 
-        self.__rules: "FoldingRules | None" = None
+        self.__rules: "list[Lookup] | None" = None
 
     def _load(self, filepath: str):
-        from .lib.builder import FoldingRules, FoldingRuleBuildUtils
-
         # SourceFileLoader because spec_from_file_location only accepts files with a `py` file extension
         spec = importlib.util.spec_from_loader(filepath, SourceFileLoader(filepath, filepath))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         
-        assert isinstance(rules := module.init(FoldingRuleBuildUtils, FoldingRules), FoldingRules)
-        self.__rules = rules
-        self._longest_key = rules.longest_key
+
+        self.__rules = module.rules
+
+        if hasattr(module, "LONGEST_KEY"):
+            self._longest_key = module.LONGEST_KEY
 
     def __getitem__(self, key: tuple[str]) -> str:
         result = self.__lookup(key)
@@ -55,7 +51,7 @@ class PythonFoldingDictionary(StenoDictionary):
     
     def __lookup(self, key: tuple[str]) -> Optional[str]:
         strokes = tuple(Stroke.from_steno(steno) for steno in key)
-        for lookup in self.__rules.lookups:
+        for lookup in self.__rules:
             # Prevent a folding dictionary from looking up itself
             if lookup in self.__current_lookups:
                 continue

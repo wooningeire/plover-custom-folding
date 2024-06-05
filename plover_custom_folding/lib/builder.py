@@ -1,18 +1,10 @@
 from plover.steno import Stroke
 from plover.translation import Translator
 
-from dataclasses import dataclass
 from typing import Callable
-from weakref import WeakKeyDictionary
-
-from .types import Lookup
 
 
-@dataclass
-class FoldingRules:
-    lookups: list[Lookup]
-    longest_key: int = 8
-
+Lookup = Callable[[tuple[Stroke], Translator], str]
 
 _StrokeFilter = Callable[[tuple[Stroke, ...]], tuple[Stroke, ...]]
 
@@ -37,8 +29,8 @@ def _create_stroke_index_mapping(strokes: tuple[Stroke, ...]):
 class _Case:
     def __init__(
         self,
-        contained_substroke = _empty_stroke(),
-        toggled_substroke = _empty_stroke(),
+        contained_substroke: Stroke,
+        toggled_substroke: Stroke,
     ):
         self.__contained_substroke = contained_substroke
         self.__toggled_substroke = toggled_substroke
@@ -314,3 +306,16 @@ class FoldingRuleBuildUtils:
             return None
         
         return f"{foldless_translation} {fold_chord_translation}"
+    
+    @staticmethod
+    @_LookupStrategy.of
+    def unfold_prefix(strokes_without_folds: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
+        foldless_translation = translator.lookup(strokes_without_folds)
+        if foldless_translation is None:
+            return None
+        
+        fold_chord_translation = translator.lookup((folds[0],))
+        if fold_chord_translation is None:
+            return None
+        
+        return f"{fold_chord_translation} {foldless_translation}"
