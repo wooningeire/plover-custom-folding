@@ -220,10 +220,12 @@ class Rule:
         prerequisite: _Prerequisite,
         lookup_strategies: tuple[_LookupStrategy],
         additional_rules: "tuple[Rule]"=(),
+        alternative_rules: "tuple[Rule]"=(),
     ):
         self.__prerequisite = prerequisite
         self.__lookup_strategies = lookup_strategies
         self.__additional_rules = additional_rules
+        self.__alternative_rules = alternative_rules
 
 
     __current_global_folds: "tuple[Stroke] | None" = None
@@ -266,12 +268,21 @@ class Rule:
             if translation is not None:
                 Rule.__current_global_folds = None
                 return translation
+
+        for alternative_rule in self.__alternative_rules:
+            translation = alternative_rule(defolded_strokes, translator)
+            if translation is not None:
+                Rule.__current_global_folds = None
+                return translation
         
         Rule.__current_global_folds = last_folds
         return None
     
+    def or_also(self, *alternative_rules: "Rule"):
+        return Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules, self.__alternative_rules + alternative_rules)
+    
     def unless_also(self, *additional_rules: "Rule"):
-        return Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules + additional_rules)
+        return Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules + additional_rules, self.__alternative_rules)
 
 
 class _LookupStrategyGatherer:
@@ -281,6 +292,9 @@ class _LookupStrategyGatherer:
     def then(self, *lookup_strategy_creators: Callable[[], _LookupStrategy]):
         """Gathers a list of lookup strategies that are run IN ORDER and INDEPENDENTLY."""
         return Rule(self.__prerequisite, tuple(create_lookup_strategy() for create_lookup_strategy in lookup_strategy_creators))
+    
+    def and_also(self, *rules: Rule):
+        return Rule(self.__prerequisite, ()).unless_also(*rules)
     
 
 class _TranslationModificationGatherer:
@@ -428,6 +442,15 @@ class FoldingRuleBuildUtils:
                 return None
         
             return f"{fold_chord_translation} {foldless_translation}"
+        
+        return handler
+    
+
+    @staticmethod
+    def use_defolded_translation():
+        @_LookupStrategy.of
+        def handler(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
+            return translator.lookup(defolded_strokes)
         
         return handler
     
