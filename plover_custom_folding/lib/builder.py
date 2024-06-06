@@ -7,7 +7,8 @@ from typing import Callable
 Lookup = Callable[[tuple[Stroke], Translator], str]
 Formatter = Callable[[str], str]
 
-_StrokeFilter = Callable[[tuple[Stroke, ...]], tuple[Stroke, ...]]
+_Outline = tuple[Stroke, ...]
+_StrokeFilter = Callable[[_Outline], _Outline]
 
 def _toggle_substroke(stroke: Stroke, substroke: Stroke):
     if substroke in stroke:
@@ -21,7 +22,7 @@ def _strokes_overlap(a: Stroke, b: Stroke):
 def _empty_stroke():
     return Stroke.from_keys(())
 
-def _create_stroke_index_mapping(strokes: tuple[Stroke, ...]):
+def _create_stroke_index_mapping(strokes: _Outline):
     return {
         stroke: i
         for i, stroke in enumerate(strokes)
@@ -36,7 +37,7 @@ class _Case:
         self.__contained_substroke = contained_substroke
         self.__toggled_substroke = toggled_substroke
 
-    def satisfied_by(self, filtered_strokes: tuple[Stroke, ...]):
+    def satisfied_by(self, filtered_strokes: _Outline):
         return all(self.__contained_substroke in stroke for stroke in filtered_strokes)
     
     def remove_fold(self, stroke: Stroke):
@@ -56,7 +57,7 @@ class _Condition:
     ):
         self.__cases = cases
     
-    def first_case_satisfied_by(self, filtered_strokes: tuple[Stroke, ...]) -> "_Case | None":
+    def first_case_satisfied_by(self, filtered_strokes: _Outline) -> "_Case | None":
         """Returns the case which is satisfied by the given outline, or None if no such case exists."""
         for case in self.__cases:
             if case.satisfied_by(filtered_strokes):
@@ -82,7 +83,7 @@ class _Clause:
         # assert not _strokes_overlap(contained_substroke, toggled_substroke)
 
 
-    def first_cases_satisfied_by(self, strokes: tuple[Stroke, ...]) -> "tuple[_Case, ...] | None":
+    def first_cases_satisfied_by(self, strokes: _Outline) -> "tuple[_Case, ...] | None":
         """Returns a tuple of cases which are satisfied by the given outline for each condition, or None if any
         condition fails."""
         cases: list[_Case] = []
@@ -132,7 +133,7 @@ class _Clause:
     
     fold_toggled = folds_toggled
     
-    def remove_folds(self, strokes: tuple[Stroke, ...], *, stroke_index_mapping: "dict[Stroke, int] | None"=None):
+    def remove_folds(self, strokes: _Outline, *, stroke_index_mapping: "dict[Stroke, int] | None"=None):
         cases = self.first_cases_satisfied_by(strokes)
 
         new_strokes = list(strokes)
@@ -145,7 +146,7 @@ class _Clause:
 
         return tuple(new_strokes)
     
-    def get_folds(self, strokes: tuple[Stroke, ...], *, folds: "tuple[Stroke, ...] | None"=None, stroke_index_mapping: "dict[Stroke, int] | None"=None):
+    def get_folds(self, strokes: _Outline, *, folds: "_Outline | None"=None, stroke_index_mapping: "dict[Stroke, int] | None"=None):
         cases = self.first_cases_satisfied_by(strokes)
 
         if folds is not None:
@@ -168,7 +169,7 @@ class _Prerequisite:
     def __init__(self, clauses: tuple[_Clause]):
         self.__clauses = clauses
 
-    def first_cases_satisfied_by(self, strokes: tuple[Stroke, ...]):
+    def first_cases_satisfied_by(self, strokes: _Outline):
         """Returns a tuple of tuples of cases which are satisfied by the given outline for each clause, or None if any
         condition fails."""
         cases_by_clause: list[_Case] = []
@@ -181,14 +182,14 @@ class _Prerequisite:
             
         return cases_by_clause
     
-    def remove_folds(self, strokes: tuple[Stroke, ...], *, stroke_index_mapping: "dict[Stroke, int] | None"=None):
+    def remove_folds(self, strokes: _Outline, *, stroke_index_mapping: "dict[Stroke, int] | None"=None):
         stroke_index_mapping = stroke_index_mapping or _create_stroke_index_mapping(strokes)
         for clause in self.__clauses:
             strokes = clause.remove_folds(strokes, stroke_index_mapping=stroke_index_mapping)
     
         return strokes
     
-    def get_folds(self, strokes: tuple[Stroke, ...], *, stroke_index_mapping: "dict[Stroke, int] | None"=None):
+    def get_folds(self, strokes: _Outline, *, stroke_index_mapping: "dict[Stroke, int] | None"=None):
         folds = tuple(_empty_stroke() for _ in strokes)
         stroke_index_mapping = stroke_index_mapping or _create_stroke_index_mapping(strokes)
         for clause in self.__clauses:
@@ -197,7 +198,7 @@ class _Prerequisite:
         return folds
 
 
-_LookupStrategyHandler = Callable[[tuple[Stroke, ...], tuple[Stroke, ...], tuple[Stroke, ...], Translator], tuple[Formatter, str]]
+_LookupStrategyHandler = Callable[[_Outline, _Outline, _Outline, Translator], tuple[Formatter, str]]
 
 class _LookupStrategy:
     """Manipulates the input strokes and folded chords, queries the main translator, and produces new translations."""
@@ -209,7 +210,7 @@ class _LookupStrategy:
     def of(fn: _LookupStrategyHandler):
         return _LookupStrategy(fn)
     
-    def __call__(self, defolded_strokes: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator) -> "str | None":
+    def __call__(self, defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator) -> "str | None":
         return self.__handler(defolded_strokes, folds, strokes, translator)
 
 
@@ -224,7 +225,7 @@ class Rule:
         self.__lookup_strategies = lookup_strategies
         self.__additional_rules = additional_rules
 
-    def __call__(self, strokes: tuple[Stroke, ...], translator: Translator) -> str:
+    def __call__(self, strokes: _Outline, translator: Translator) -> str:
         cases_by_clause = self.__prerequisite.first_cases_satisfied_by(strokes)
         if cases_by_clause is None:
             return None
@@ -280,7 +281,7 @@ class FoldingRuleBuildUtils:
         """Translates the outline without any folds, and modifies the translation according to the callback."""
 
         @_LookupStrategy.of
-        def handler(defolded_strokes: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
+        def handler(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
             foldless_translation = translator.lookup(defolded_strokes)
             if foldless_translation is None:
                 return None
@@ -299,7 +300,7 @@ class FoldingRuleBuildUtils:
     
     @staticmethod
     @_LookupStrategy.of
-    def unfold_suffix(defolded_strokes: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
+    def unfold_suffix(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
         """Default folding behavior. Removes the fold from the final stroke and appends the folded chord as a new
         stroke, using the chord's dictionary entry."""
 
@@ -315,7 +316,7 @@ class FoldingRuleBuildUtils:
     
     @staticmethod
     @_LookupStrategy.of
-    def unfold_prefix(defolded_strokes: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
+    def unfold_prefix(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
         foldless_translation = translator.lookup(defolded_strokes)
         if foldless_translation is None:
             return None
@@ -326,6 +327,31 @@ class FoldingRuleBuildUtils:
         
         return f"{fold_chord_translation} {foldless_translation}"
 
+    
+    @staticmethod
+    def modify_outline(modify_outline: Callable[[_Outline], _Outline]):
+        """Translates the outline without any folds, and modifies the translation according to the callback."""
+
+        @_LookupStrategy.of
+        def handler(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
+            foldless_translation = translator.lookup(modify_outline(defolded_strokes))
+            if foldless_translation is None:
+                return None
+                        
+            return foldless_translation
+
+        return handler
+    
+    @staticmethod
+    def prefix_outline(new_strokes_steno: str):
+        new_strokes = tuple(Stroke.from_steno(stroke_steno) for stroke_steno in new_strokes_steno.split("/"))
+        return FoldingRuleBuildUtils.modify_outline(lambda strokes: new_strokes[:-1] + (new_strokes[-1] + strokes[0],) + strokes[1:])
+        
+    @staticmethod
+    def suffix_outline(new_strokes_steno: str):
+        new_strokes = tuple(Stroke.from_steno(stroke_steno) for stroke_steno in new_strokes_steno.split("/"))
+        return FoldingRuleBuildUtils.modify_outline(lambda strokes: strokes[:-1] + (new_strokes[0] + strokes[-1],) + new_strokes[1:])
+    
 
     @staticmethod
     def default_system_rules():
