@@ -225,6 +225,9 @@ class Rule:
         self.__lookup_strategies = lookup_strategies
         self.__additional_rules = additional_rules
 
+
+    __current_global_folds: "tuple[Stroke] | None" = None
+
     def __call__(self, strokes: _Outline, translator: Translator) -> str:
         cases_by_clause = self.__prerequisite.first_cases_satisfied_by(strokes)
         if cases_by_clause is None:
@@ -236,17 +239,35 @@ class Rule:
         folds = self.__prerequisite.get_folds(strokes, stroke_index_mapping=stroke_index_mapping)
 
 
+        # Ensure that folds between rules do not overlap
+        last_folds = Rule.__current_global_folds
+        if Rule.__current_global_folds is None:
+            Rule.__current_global_folds = folds
+        else:
+            new_folds: list[Stroke] = []
+            for i, fold in enumerate(Rule.__current_global_folds):
+                if _strokes_overlap(fold, folds[i]):
+                    return None
+                
+                new_folds.append(fold + folds[i])
+
+            Rule.__current_global_folds = tuple(new_folds)
+
+
         # Check additional rules before the main rule
         for additional_rule in self.__additional_rules:
             translation = additional_rule(defolded_strokes, translator)
             if translation is not None:
+                Rule.__current_global_folds = None
                 return translation
 
         for lookup in self.__lookup_strategies:
             translation = lookup(defolded_strokes, folds, strokes, translator)
             if translation is not None:
+                Rule.__current_global_folds = None
                 return translation
         
+        Rule.__current_global_folds = last_folds
         return None
     
     def unless_also(self, *additional_rules: "Rule"):
@@ -272,7 +293,7 @@ class _TranslationModificationGatherer:
         self.__modify_translation = modify_translation
 
 
-    def __call__(self) -> "_LookupStrategy":
+    def __call__(self) -> _LookupStrategy:
         @_LookupStrategy.of
         def handler(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
             foldless_translation = translator.lookup(self.__modify_outline(defolded_strokes))
@@ -301,7 +322,7 @@ class _OutlineModificationGatherer:
 
 
     def __call__(self) -> _LookupStrategy:
-        self.__to_translation_modification_gatherer()()
+        return self.__to_translation_modification_gatherer()()
 
 
     def __to_translation_modification_gatherer(self, modify_translation: Formatter=lambda translation: translation) -> _TranslationModificationGatherer:
