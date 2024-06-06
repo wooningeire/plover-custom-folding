@@ -115,7 +115,7 @@ class _Clause:
 
     fold = folds
 
-    def folds_toggled(self, *substrokes_steno: str) -> "_Clause":
+    def toggles(self, *substrokes_steno: str) -> "_Clause":
         """Tests if ANY SINGLE given substroke is toggled in a set of strokes."""
 
         substrokes = tuple(Stroke.from_steno(substroke_steno) for substroke_steno in substrokes_steno)
@@ -131,7 +131,7 @@ class _Clause:
             self.__conditions + (_Condition(tuple(cases)),),
         )
     
-    fold_toggled = folds_toggled
+    toggle = toggles
     
     def remove_folds(self, strokes: _Outline, *, stroke_index_mapping: "dict[Stroke, int] | None"=None):
         cases = self.first_cases_satisfied_by(strokes)
@@ -301,7 +301,7 @@ class _TranslationModificationGatherer:
     def __init__(
         self,
         modify_translation: Callable[[str], str]=lambda translation: translation,
-        modify_outline: Callable[[_Outline], _Outline]=lambda strokes: strokes
+        modify_outline: Callable[[_Outline], _Outline]=lambda strokes: strokes,
     ):
         self.__modify_outline = modify_outline
         self.__modify_translation = modify_translation
@@ -324,10 +324,10 @@ class _TranslationModificationGatherer:
         return _TranslationModificationGatherer(lambda translation: modify_translation(self.__modify_translation(translation)), self.__modify_outline)
     
     def prefix_translation(self, string: str) -> "_TranslationModificationGatherer":
-        return _TranslationModificationGatherer().modify_translation(lambda translation: f"{string}{translation}")
+        return self.modify_translation(lambda translation: f"{string}{translation}")
         
     def suffix_translation(self, string: str) -> "_TranslationModificationGatherer":
-        return _TranslationModificationGatherer().modify_translation(lambda translation: f"{translation}{string}")
+        return self.modify_translation(lambda translation: f"{translation}{string}")
 
 
 class _OutlineModificationGatherer:
@@ -359,11 +359,11 @@ class _OutlineModificationGatherer:
     
     def prefix_outline(self, new_strokes_steno: str) -> "_OutlineModificationGatherer":
         new_strokes = tuple(Stroke.from_steno(stroke_steno) for stroke_steno in new_strokes_steno.split("/"))
-        return _OutlineModificationGatherer().modify_outline(lambda strokes: new_strokes[:-1] + (new_strokes[-1] + strokes[0],) + strokes[1:])
+        return self.modify_outline(lambda strokes: new_strokes[:-1] + (new_strokes[-1] + strokes[0],) + strokes[1:])
         
     def suffix_outline(self, new_strokes_steno: str) -> "_OutlineModificationGatherer":
         new_strokes = tuple(Stroke.from_steno(stroke_steno) for stroke_steno in new_strokes_steno.split("/"))
-        return _OutlineModificationGatherer().modify_outline(lambda strokes: strokes[:-1] + (new_strokes[0] + strokes[-1],) + new_strokes[1:])
+        return self.modify_outline(lambda strokes: strokes[:-1] + (new_strokes[0] + strokes[-1],) + new_strokes[1:])
 
 
 class FoldingRuleBuildUtils:
