@@ -16,40 +16,40 @@ from plover_custom_folding import f, Lookup
 
 # Required. A list of rules or lookup functions of type `Callable[[tuple[Stroke, ...], Translator], str]`.
 rules: list[Lookup] = [
-    # Plover's default suffix folding rules based on the current system. Included so they take precedence over the
-    # custom rules below.
-    f.default_rules(),
-
-
-    # Allows the substrokes `-GS` or `-GZ` to be included in the last stroke to append "{^ings}".
-    # E.g., `WAUFPGS` => `watchings`
-    f.when(f.last_stroke.folds("-GS", "-GZ")).then(f.append_to_translation(" {^ings}")),
-
-
-    # Allows the substroke `*G` to be included in the last stroke to append "{^in'}".
-    # We can use `unfold_suffix` because`*G` is defined as "{^in'}" in main.json already.
-    f.when(f.last_stroke.folds("*G")).then(f.unfold_suffix),
+    # Allows the `^` key to be included in every stroke to make the translation a suffix (preserving case),
+    # or when the first stroke also includes `+`, then also hyphenate it (preserving case).
+    # E.g., `^PWUFT/^*ER` => `{^~|^}buster`
+    f.when(f.all_strokes.fold("^")).then(f.prefix_translation("{^~|^}"))
+        .unless_also(
+            f.when(f.first_stroke.folds("+")).then(f.prefix_translation("{^~|-^}")),
+        ),
 
 
     # Allows the `#` key to be included in the first stroke to capitalize a word.
     # E.g., `#KAP/TAL` => `{-|}capital` ("Capital")
-    f.when(f.first_stroke.folds("#")).then(f.prepend_to_translation("{-|}")),
+    f.when(f.first_stroke.folds("#")).then(f.prefix_translation("{-|}")),
 
 
-    # Allows the `^` key to be included in every stroke to make the translation a suffix (preserving case),
-    # or when the first stroke also includes `+`, then also hyphenate it (preserving case).
-    # E.g., `^PWUFT/^ER` => `{^~|^}buster`
-    f.when(f.all_strokes.fold("^")).then(f.prepend_to_translation("{^~|^}"))
-        .unless_also(
-            f.when(f.first_stroke.folds("+")).then(f.prepend_to_translation("{^~|-^}")),
-        ),
+    # Plover's default suffix folding rules based on the current system. Included so they take precedence over the
+    # custom rules below.
+    f.default_system_rules(),
+
+
+    # Allows the substrokes `-GS` or `-GZ` to be included in the last stroke to append "{^ings}".
+    # E.g., `WAUFPGS` => `watchings`
+    f.when(f.last_stroke.folds("-GS", "-GZ")).then(f.suffix_translation(" {^ings}")),
+
+
+    # Allows `-G` to be included and `*` to be toggled in the last stroke to append "{^in'}".
+    # We can use `unfold_suffix` because `*G` is defined as "{^in'}" in main.json already.
+    f.when(f.last_stroke.folds("-G").folds_toggled("*")).then(f.unfold_suffix),
 ]
 
 # Optional. The maximum length of the outline to check these folding rules for.
 LONGEST_KEY: int = 8
 ```
 
-Note that folding rules defined in a folding dictionary can be combined, e.g., `#^+WAUPGS` with the above rules translates to `{-|}{^~|-^}watch {^ings}` ("-Watchings" as a suffix).
+Note that separate folding rules defined in a folding dictionary can be combined, e.g., `#^+WAUPGS` with the above rules translates to `{^~|-^}{-|}watch {^ings}` ("-Watchings" as a suffix).
 
 ```py
 # If desired, we can manually define our own custom functions as rules.

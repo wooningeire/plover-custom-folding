@@ -5,6 +5,7 @@ from typing import Callable
 
 
 Lookup = Callable[[tuple[Stroke], Translator], str]
+Formatter = Callable[[str], str]
 
 _StrokeFilter = Callable[[tuple[Stroke, ...]], tuple[Stroke, ...]]
 
@@ -96,6 +97,8 @@ class _Clause:
     
 
     def folds(self, *substrokes_steno: str) -> "_Clause":
+        """Tests if ANY SINGLE given substroke is folded into a set of strokes."""
+
         substrokes = tuple(Stroke.from_steno(substroke_steno) for substroke_steno in substrokes_steno)
         cases: list[_Case] = []
         for substroke in sorted(substrokes, key=lambda substroke: len(substroke), reverse=True):
@@ -112,6 +115,8 @@ class _Clause:
     fold = folds
 
     def folds_toggled(self, *substrokes_steno: str) -> "_Clause":
+        """Tests if ANY SINGLE given substroke is toggled in a set of strokes."""
+
         substrokes = tuple(Stroke.from_steno(substroke_steno) for substroke_steno in substrokes_steno)
         cases: list[_Case] = []
         for substroke in sorted(substrokes, key=lambda substroke: len(substroke), reverse=True):
@@ -143,7 +148,10 @@ class _Clause:
     def get_folds(self, strokes: tuple[Stroke, ...], *, folds: "tuple[Stroke, ...] | None"=None, stroke_index_mapping: "dict[Stroke, int] | None"=None):
         cases = self.first_cases_satisfied_by(strokes)
 
-        new_folds = list(folds) if folds is not None else list(_empty_stroke() for _ in strokes)
+        if folds is not None:
+            new_folds = list(folds)
+        else:
+            new_folds = [_empty_stroke() for _ in strokes]
         stroke_index_mapping = stroke_index_mapping or _create_stroke_index_mapping(strokes)
         for stroke in self.__stroke_filter(strokes):
             for case in cases:
@@ -189,8 +197,7 @@ class _Prerequisite:
         return folds
 
 
-
-_LookupStrategyHandler = Callable[[tuple[Stroke, ...], tuple[Stroke, ...], tuple[Stroke, ...], Translator], "str | None"]
+_LookupStrategyHandler = Callable[[tuple[Stroke, ...], tuple[Stroke, ...], tuple[Stroke, ...], Translator], tuple[Formatter, str]]
 
 class _LookupStrategy:
     """Manipulates the input strokes and folded chords, queries the main translator, and produces new translations."""
@@ -202,16 +209,16 @@ class _LookupStrategy:
     def of(fn: _LookupStrategyHandler):
         return _LookupStrategy(fn)
     
-    def __call__(self, strokes_without_folds: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator) -> "str | None":
-        return self.__handler(strokes_without_folds, folds, strokes, translator)
+    def __call__(self, defolded_strokes: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator) -> "str | None":
+        return self.__handler(defolded_strokes, folds, strokes, translator)
 
 
-class _Rule:
+class Rule:
     def __init__(
         self,
         prerequisite: _Prerequisite,
         lookup_strategies: tuple[_LookupStrategy],
-        additional_rules: "tuple[_Rule]"=(),
+        additional_rules: "tuple[Rule]"=(),
     ):
         self.__prerequisite = prerequisite
         self.__lookup_strategies = lookup_strategies
@@ -220,33 +227,29 @@ class _Rule:
     def __call__(self, strokes: tuple[Stroke, ...], translator: Translator) -> str:
         cases_by_clause = self.__prerequisite.first_cases_satisfied_by(strokes)
         if cases_by_clause is None:
-            raise KeyError
-                
-
-        # Remove and get the folds in the outline
-
+            return None
+        
         stroke_index_mapping = _create_stroke_index_mapping(strokes)
 
-        strokes_without_folds = self.__prerequisite.remove_folds(strokes, stroke_index_mapping=stroke_index_mapping)
+        defolded_strokes = self.__prerequisite.remove_folds(strokes, stroke_index_mapping=stroke_index_mapping)
         folds = self.__prerequisite.get_folds(strokes, stroke_index_mapping=stroke_index_mapping)
 
 
+        # Check additional rules before the main rule
         for additional_rule in self.__additional_rules:
-            try:
-                return additional_rule(strokes_without_folds, translator)
-            except KeyError:
-                continue
-
+            translation = additional_rule(defolded_strokes, translator)
+            if translation is not None:
+                return translation
 
         for lookup in self.__lookup_strategies:
-            new_translation = lookup(strokes_without_folds, folds, strokes, translator)
-            if new_translation is not None:
-                return new_translation
-
-        raise KeyError
+            translation = lookup(defolded_strokes, folds, strokes, translator)
+            if translation is not None:
+                return translation
+        
+        return None
     
-    def unless_also(self, *additional_rules: "_Rule"):
-        return _Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules + additional_rules)
+    def unless_also(self, *additional_rules: "Rule"):
+        return Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules + additional_rules)
 
 
 class _LookupStrategyGatherer:
@@ -254,12 +257,14 @@ class _LookupStrategyGatherer:
         self.__prerequisite = prerequisite
 
     def then(self, *lookup_strategies: _LookupStrategy):
-        return _Rule(self.__prerequisite, lookup_strategies)
-    
+        """Gathers a list of lookup strategies that are run IN ORDER and INDEPENDENTLY."""
+        return Rule(self.__prerequisite, lookup_strategies)
+
 
 
 class FoldingRuleBuildUtils:
     def when(*clauses: _Clause):
+        """Gathers clauses that ALL must be true for this rule to be used."""
         return _LookupStrategyGatherer(_Prerequisite(clauses))
 
     first_stroke: _Clause = _Clause(lambda strokes: (strokes[0],))
@@ -271,12 +276,12 @@ class FoldingRuleBuildUtils:
     
     
     @staticmethod
-    def modify_translation(modify_translation: Callable[[str], str]):
+    def modify_translation(modify_translation: Formatter):
         """Translates the outline without any folds, and modifies the translation according to the callback."""
 
         @_LookupStrategy.of
-        def handler(strokes_without_folds: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
-            foldless_translation = translator.lookup(strokes_without_folds)
+        def handler(defolded_strokes: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
+            foldless_translation = translator.lookup(defolded_strokes)
             if foldless_translation is None:
                 return None
                         
@@ -285,20 +290,20 @@ class FoldingRuleBuildUtils:
         return handler
     
     @staticmethod
-    def prepend_to_translation(string: str):
+    def prefix_translation(string: str):
         return FoldingRuleBuildUtils.modify_translation(lambda translation: f"{string}{translation}")
         
     @staticmethod
-    def append_to_translation(string: str):
+    def suffix_translation(string: str):
         return FoldingRuleBuildUtils.modify_translation(lambda translation: f"{translation}{string}")
     
     @staticmethod
     @_LookupStrategy.of
-    def unfold_suffix(strokes_without_folds: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
+    def unfold_suffix(defolded_strokes: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
         """Default folding behavior. Removes the fold from the final stroke and appends the folded chord as a new
         stroke, using the chord's dictionary entry."""
 
-        foldless_translation = translator.lookup(strokes_without_folds)
+        foldless_translation = translator.lookup(defolded_strokes)
         if foldless_translation is None:
             return None
         
@@ -310,8 +315,8 @@ class FoldingRuleBuildUtils:
     
     @staticmethod
     @_LookupStrategy.of
-    def unfold_prefix(strokes_without_folds: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
-        foldless_translation = translator.lookup(strokes_without_folds)
+    def unfold_prefix(defolded_strokes: tuple[Stroke, ...], folds: tuple[Stroke, ...], strokes: tuple[Stroke, ...], translator: Translator):
+        foldless_translation = translator.lookup(defolded_strokes)
         if foldless_translation is None:
             return None
         
@@ -320,10 +325,10 @@ class FoldingRuleBuildUtils:
             return None
         
         return f"{fold_chord_translation} {foldless_translation}"
-    
+
 
     @staticmethod
-    def default_rules():
+    def default_system_rules():
         """Plover's default folding rules, depend on the current system."""
 
         from plover.system import SUFFIX_KEYS

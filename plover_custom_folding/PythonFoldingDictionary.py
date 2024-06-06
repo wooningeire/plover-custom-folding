@@ -1,19 +1,18 @@
 import importlib.util
 from importlib.machinery import SourceFileLoader
-from typing import Optional
+from typing import Optional, Callable
 
 from plover.steno import Stroke
 from plover.steno_dictionary import StenoDictionary
 
 from .EngineGetterExtension import translator_container
 
-from .lib.builder import Lookup
+from .lib.builder import Rule, Formatter
 
 
 class PythonFoldingDictionary(StenoDictionary):
     readonly = True
 
-    __current_lookups: set[Lookup] = set()
 
     def __init__(self):
         super().__init__()
@@ -21,7 +20,8 @@ class PythonFoldingDictionary(StenoDictionary):
         """(override)"""
         self._longest_key = 8
 
-        self.__rules: "list[Lookup] | None" = None
+        self.__rules: "list[Rule] | None" = None
+        self.__current_rules: set[Rule] = set()
 
     def _load(self, filepath: str):
         # SourceFileLoader because spec_from_file_location only accepts files with a `py` file extension
@@ -51,18 +51,19 @@ class PythonFoldingDictionary(StenoDictionary):
     
     def __lookup(self, key: tuple[str]) -> Optional[str]:
         strokes = tuple(Stroke.from_steno(steno) for steno in key)
-        for lookup in self.__rules:
-            # Prevent a folding dictionary from looking up itself
-            if lookup in self.__current_lookups:
+        for rule in self.__rules:
+            # Prevent a rule from looking up itself
+            if rule in self.__current_rules:
                 continue
             
-            self.__current_lookups.add(lookup)
+            self.__current_rules.add(rule)
 
-            try:
-                return lookup(strokes, translator_container.translator)
-            except KeyError:
+            translation = rule(strokes, translator_container.translator)
+            
+            self.__current_rules.remove(rule)
+            
+            if translation is None:
                 continue
-            finally:
-                self.__current_lookups.remove(lookup)
+            return translation
 
         return None
