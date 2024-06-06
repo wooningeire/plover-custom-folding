@@ -257,14 +257,82 @@ class _LookupStrategyGatherer:
     def __init__(self, prerequisite: _Prerequisite):
         self.__prerequisite = prerequisite
 
-    def then(self, *lookup_strategies: _LookupStrategy):
+    def then(self, *lookup_strategy_creators: Callable[[], _LookupStrategy]):
         """Gathers a list of lookup strategies that are run IN ORDER and INDEPENDENTLY."""
-        return Rule(self.__prerequisite, lookup_strategies)
+        return Rule(self.__prerequisite, tuple(create_lookup_strategy() for create_lookup_strategy in lookup_strategy_creators))
+    
 
+class _TranslationModificationGatherer:
+    def __init__(
+        self,
+        modify_translation: Callable[[str], str]=lambda translation: translation,
+        modify_outline: Callable[[_Outline], _Outline]=lambda strokes: strokes
+    ):
+        self.__modify_outline = modify_outline
+        self.__modify_translation = modify_translation
+
+
+    def __call__(self) -> "_LookupStrategy":
+        @_LookupStrategy.of
+        def handler(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
+            foldless_translation = translator.lookup(self.__modify_outline(defolded_strokes))
+            if foldless_translation is None:
+                return None
+                        
+            return self.__modify_translation(foldless_translation)
+
+        return handler
+    
+
+    def modify_translation(self, modify_translation: Formatter) -> "_TranslationModificationGatherer":
+        """Translates the outline without any folds, and modifies the translation according to the callback."""
+        return _TranslationModificationGatherer(lambda translation: modify_translation(self.__modify_translation(translation)), self.__modify_outline)
+    
+    def prefix_translation(self, string: str) -> "_TranslationModificationGatherer":
+        return _TranslationModificationGatherer().modify_translation(lambda translation: f"{string}{translation}")
+        
+    def suffix_translation(self, string: str) -> "_TranslationModificationGatherer":
+        return _TranslationModificationGatherer().modify_translation(lambda translation: f"{translation}{string}")
+
+
+class _OutlineModificationGatherer:
+    def __init__(self, modify_outline: Callable[[_Outline], _Outline]=lambda strokes: strokes):
+        self.__modify_outline = modify_outline
+
+
+    def __call__(self) -> _LookupStrategy:
+        self.__to_translation_modification_gatherer()()
+
+
+    def __to_translation_modification_gatherer(self, modify_translation: Formatter=lambda translation: translation) -> _TranslationModificationGatherer:
+        return _TranslationModificationGatherer(modify_translation, self.__modify_outline)
+
+
+    def modify_translation(self, modify_translation: Formatter=lambda translation: translation) -> _TranslationModificationGatherer:
+        """Translates the outline without any folds, and modifies the translation according to the callback."""
+        return self.__to_translation_modification_gatherer(modify_translation)
+    
+    def prefix_translation(self, string: str) -> _TranslationModificationGatherer:
+        return self.__to_translation_modification_gatherer().prefix_translation(string)
+        
+    def suffix_translation(self, string: str) -> _TranslationModificationGatherer:
+        return self.__to_translation_modification_gatherer().suffix_translation(string)
+    
+    def modify_outline(self, modify_outline: Callable[[_Outline], _Outline]) -> "_OutlineModificationGatherer":
+        """Translates the outline without any folds, and modifies the translation according to the callback."""
+        return _OutlineModificationGatherer(lambda translation: modify_outline(self.__modify_outline(translation)))
+    
+    def prefix_outline(self, new_strokes_steno: str) -> "_OutlineModificationGatherer":
+        new_strokes = tuple(Stroke.from_steno(stroke_steno) for stroke_steno in new_strokes_steno.split("/"))
+        return _OutlineModificationGatherer().modify_outline(lambda strokes: new_strokes[:-1] + (new_strokes[-1] + strokes[0],) + strokes[1:])
+        
+    def suffix_outline(self, new_strokes_steno: str) -> "_OutlineModificationGatherer":
+        new_strokes = tuple(Stroke.from_steno(stroke_steno) for stroke_steno in new_strokes_steno.split("/"))
+        return _OutlineModificationGatherer().modify_outline(lambda strokes: strokes[:-1] + (new_strokes[0] + strokes[-1],) + new_strokes[1:])
 
 
 class FoldingRuleBuildUtils:
-    def when(*clauses: _Clause):
+    def when(*clauses: _Clause) -> _LookupStrategyGatherer:
         """Gathers clauses that ALL must be true for this rule to be used."""
         return _LookupStrategyGatherer(_Prerequisite(clauses))
 
@@ -275,82 +343,72 @@ class FoldingRuleBuildUtils:
     def filtered_strokes(stroke_filter: _StrokeFilter):
         return _Clause(stroke_filter)
     
+
+    @staticmethod
+    def modify_translation(modify_translation: Formatter=lambda translation: translation) -> _TranslationModificationGatherer:
+        """Translates the outline without any folds, and modifies the translation according to the callback."""
+        return _TranslationModificationGatherer(modify_translation)
     
     @staticmethod
-    def modify_translation(modify_translation: Formatter):
-        """Translates the outline without any folds, and modifies the translation according to the callback."""
+    def prefix_translation(string: str) -> _TranslationModificationGatherer:
+        return _TranslationModificationGatherer().prefix_translation(string)
+        
+    @staticmethod
+    def suffix_translation(string: str) -> _TranslationModificationGatherer:
+        return _TranslationModificationGatherer().suffix_translation(string)
+    
+    @staticmethod
+    def modify_outline(modify_outline: Callable[[_Outline], _Outline]) -> _OutlineModificationGatherer:
+        """Translates the outline without any folds, and modifies the outline according to the callback."""
+        return _OutlineModificationGatherer(modify_outline)
+    
+    @staticmethod
+    def prefix_outline(new_strokes_steno: str) -> _OutlineModificationGatherer:
+        return _OutlineModificationGatherer().prefix_outline(new_strokes_steno)
+        
+    @staticmethod
+    def suffix_outline(new_strokes_steno: str) -> _OutlineModificationGatherer:
+        return _OutlineModificationGatherer().suffix_outline(new_strokes_steno)
+    
+    @staticmethod
+    def group_rules(*rules: Rule) -> Rule:
+        return Rule(_Prerequisite(()), (), rules)
+    
+    
+    @staticmethod
+    def unfold_suffix():
+        """Default folding behavior. Removes the fold from the final stroke and appends the folded chord as a new
+        stroke, using the chord's dictionary entry."""
 
         @_LookupStrategy.of
         def handler(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
             foldless_translation = translator.lookup(defolded_strokes)
             if foldless_translation is None:
                 return None
-                        
-            return modify_translation(foldless_translation)
+            
+            fold_chord_translation = translator.lookup((folds[-1],))
+            if fold_chord_translation is None:
+                return None
+            
+            return f"{foldless_translation} {fold_chord_translation}"
 
         return handler
     
     @staticmethod
-    def prefix_translation(string: str):
-        return FoldingRuleBuildUtils.modify_translation(lambda translation: f"{string}{translation}")
-        
-    @staticmethod
-    def suffix_translation(string: str):
-        return FoldingRuleBuildUtils.modify_translation(lambda translation: f"{translation}{string}")
-    
-    @staticmethod
-    @_LookupStrategy.of
-    def unfold_suffix(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
-        """Default folding behavior. Removes the fold from the final stroke and appends the folded chord as a new
-        stroke, using the chord's dictionary entry."""
-
-        foldless_translation = translator.lookup(defolded_strokes)
-        if foldless_translation is None:
-            return None
-        
-        fold_chord_translation = translator.lookup((folds[-1],))
-        if fold_chord_translation is None:
-            return None
-        
-        return f"{foldless_translation} {fold_chord_translation}"
-    
-    @staticmethod
-    @_LookupStrategy.of
-    def unfold_prefix(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
-        foldless_translation = translator.lookup(defolded_strokes)
-        if foldless_translation is None:
-            return None
-        
-        fold_chord_translation = translator.lookup((folds[0],))
-        if fold_chord_translation is None:
-            return None
-        
-        return f"{fold_chord_translation} {foldless_translation}"
-
-    
-    @staticmethod
-    def modify_outline(modify_outline: Callable[[_Outline], _Outline]):
-        """Translates the outline without any folds, and modifies the translation according to the callback."""
-
+    def unfold_prefix():
         @_LookupStrategy.of
         def handler(defolded_strokes: _Outline, folds: _Outline, strokes: _Outline, translator: Translator):
-            foldless_translation = translator.lookup(modify_outline(defolded_strokes))
+            foldless_translation = translator.lookup(defolded_strokes)
             if foldless_translation is None:
                 return None
-                        
-            return foldless_translation
-
-        return handler
-    
-    @staticmethod
-    def prefix_outline(new_strokes_steno: str):
-        new_strokes = tuple(Stroke.from_steno(stroke_steno) for stroke_steno in new_strokes_steno.split("/"))
-        return FoldingRuleBuildUtils.modify_outline(lambda strokes: new_strokes[:-1] + (new_strokes[-1] + strokes[0],) + strokes[1:])
+            
+            fold_chord_translation = translator.lookup((folds[0],))
+            if fold_chord_translation is None:
+                return None
         
-    @staticmethod
-    def suffix_outline(new_strokes_steno: str):
-        new_strokes = tuple(Stroke.from_steno(stroke_steno) for stroke_steno in new_strokes_steno.split("/"))
-        return FoldingRuleBuildUtils.modify_outline(lambda strokes: strokes[:-1] + (new_strokes[0] + strokes[-1],) + new_strokes[1:])
+            return f"{fold_chord_translation} {foldless_translation}"
+        
+        return handler
     
 
     @staticmethod
@@ -359,6 +417,6 @@ class FoldingRuleBuildUtils:
 
         from plover.system import SUFFIX_KEYS
 
-        f = FoldingRuleBuildUtils
         return f.when(f.last_stroke.folds(*SUFFIX_KEYS)).then(f.unfold_suffix)
-    
+
+f = FoldingRuleBuildUtils
