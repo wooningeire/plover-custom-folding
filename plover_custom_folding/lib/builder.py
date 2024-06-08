@@ -178,8 +178,7 @@ class _Prerequisite:
         self.__elements = elements
     
     def satisfied_folds(self, strokes: _Outline):
-        """Generates all groups of cases which are satisfied by the given outline for each clause, or None if any
-        condition fails."""
+        """Generates all groups of cases which are satisfied by the given outline for each clause."""
         stroke_index_mapping = _create_stroke_index_mapping(strokes)
         
         for element in self.__elements:
@@ -221,10 +220,13 @@ class Rule:
 
 
     __current_folds: "tuple[Stroke, ...] | None" = None
-    unmatched_rules: "dict[_Outline, set[Rule]]" = {}
+    __unmatched_rules: "dict[_Outline, set[Rule]]" = {}  # for memoization
+    @classmethod
+    def clear_unmatched_rules(cls):
+        cls.__unmatched_rules.clear()
 
     def __call__(self, strokes: _Outline, translator: Translator) -> "str | None":
-        if strokes in Rule.unmatched_rules and self in Rule.unmatched_rules[strokes]:
+        if strokes in Rule.__unmatched_rules and self in Rule.__unmatched_rules[strokes]:
             return None
 
         if len(strokes[0].keys()) == 0:
@@ -250,6 +252,12 @@ class Rule:
 
                 Rule.__current_folds = tuple(new_folds)
 
+            # Removing folds will not affect rules that already don't match
+            if strokes in Rule.__unmatched_rules:
+                Rule.__unmatched_rules[defolded_strokes] = set(Rule.__unmatched_rules[strokes])
+            else:
+                Rule.__unmatched_rules[defolded_strokes] = set()
+
             # Check additional rules before the main rule
             for additional_rule in self.__additional_rules:
                 translation = additional_rule(defolded_strokes, translator)
@@ -268,13 +276,15 @@ class Rule:
                 if translation is not None:
                     Rule.__current_folds = last_folds
                     return translation
+                
         
             Rule.__current_folds = last_folds
+            del Rule.__unmatched_rules[defolded_strokes]
 
-        if strokes in Rule.unmatched_rules:
-            Rule.unmatched_rules[strokes].add(self)
+        if strokes in Rule.__unmatched_rules:
+            Rule.__unmatched_rules[strokes].add(self)
         else:
-            Rule.unmatched_rules[strokes] = {self}
+            Rule.__unmatched_rules[strokes] = {self}
 
         return None
     
