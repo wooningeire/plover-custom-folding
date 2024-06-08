@@ -41,6 +41,7 @@ class PythonFoldingDictionary(StenoDictionary):
 
     def __getitem__(self, key: tuple[str]) -> str:
         result = self.__lookup(key)
+        Rule.unmatched_rules.clear()
         if result is None:
             raise KeyError
         
@@ -48,6 +49,7 @@ class PythonFoldingDictionary(StenoDictionary):
 
     def get(self, key: tuple[str], fallback=None) -> Optional[str]:
         result = self.__lookup(key)
+        Rule.unmatched_rules.clear()
         if result is None:
             return fallback
         

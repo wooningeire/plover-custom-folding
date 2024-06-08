@@ -220,21 +220,25 @@ class Rule:
         self.__alternative_rules = alternative_rules
 
 
-    __current_global_folds: "tuple[Stroke, ...] | None" = None
+    __current_folds: "tuple[Stroke, ...] | None" = None
+    unmatched_rules: "dict[_Outline, set[Rule]]" = {}
 
     def __call__(self, strokes: _Outline, translator: Translator) -> "str | None":
+        if strokes in Rule.unmatched_rules and self in Rule.unmatched_rules[strokes]:
+            return None
+
         if len(strokes[0].keys()) == 0:
             return None
 
         for defolded_strokes, folds in self.__prerequisite.satisfied_folds(strokes):
             # Ensure that folds between rules do not overlap
-            last_folds = Rule.__current_global_folds
-            if Rule.__current_global_folds is None:
-                Rule.__current_global_folds = folds
+            last_folds = Rule.__current_folds
+            if Rule.__current_folds is None:
+                Rule.__current_folds = folds
             else:
                 new_folds: list[Stroke] = []
                 overlap_found = False
-                for i, fold in enumerate(Rule.__current_global_folds):
+                for i, fold in enumerate(Rule.__current_folds):
                     if _strokes_overlap(fold, folds[i]):
                         overlap_found = True
                         break
@@ -244,28 +248,33 @@ class Rule:
                 if overlap_found:
                     continue
 
-                Rule.__current_global_folds = tuple(new_folds)
+                Rule.__current_folds = tuple(new_folds)
 
             # Check additional rules before the main rule
             for additional_rule in self.__additional_rules:
                 translation = additional_rule(defolded_strokes, translator)
                 if translation is not None:
-                    Rule.__current_global_folds = last_folds
+                    Rule.__current_folds = last_folds
                     return translation
 
             for lookup in self.__lookup_strategies:
                 translation = lookup(defolded_strokes, folds, strokes, translator)
                 if translation is not None:
-                    Rule.__current_global_folds = last_folds
+                    Rule.__current_folds = last_folds
                     return translation
 
             for alternative_rule in self.__alternative_rules:
                 translation = alternative_rule(defolded_strokes, translator)
                 if translation is not None:
-                    Rule.__current_global_folds = last_folds
+                    Rule.__current_folds = last_folds
                     return translation
         
-            Rule.__current_global_folds = last_folds
+            Rule.__current_folds = last_folds
+
+        if strokes in Rule.unmatched_rules:
+            Rule.unmatched_rules[strokes].add(self)
+        else:
+            Rule.unmatched_rules[strokes] = {self}
 
         return None
     
