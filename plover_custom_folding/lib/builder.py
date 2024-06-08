@@ -1,5 +1,6 @@
 from plover.steno import Stroke
 from plover.translation import Translator
+import plover.log
 
 from typing import Callable, Generator, TypeVar
 
@@ -19,7 +20,7 @@ def _toggle_substroke(stroke: Stroke, substroke: Stroke):
         return stroke + substroke
     
 def _strokes_overlap(a: Stroke, b: Stroke):
-    return ~(~a | ~b) != 0
+    return ~(~a | ~b) != 0  # De Morgan's Law
 
 def _empty_stroke() -> Stroke:
     return Stroke.from_keys(())
@@ -232,32 +233,36 @@ class Rule:
                 Rule.__current_global_folds = folds
             else:
                 new_folds: list[Stroke] = []
+                overlap_found = False
                 for i, fold in enumerate(Rule.__current_global_folds):
                     if _strokes_overlap(fold, folds[i]):
-                        continue
+                        overlap_found = True
+                        break
                     
                     new_folds.append(fold + folds[i])
 
-                Rule.__current_global_folds = tuple(new_folds)
+                if overlap_found:
+                    continue
 
+                Rule.__current_global_folds = tuple(new_folds)
 
             # Check additional rules before the main rule
             for additional_rule in self.__additional_rules:
                 translation = additional_rule(defolded_strokes, translator)
                 if translation is not None:
-                    Rule.__current_global_folds = None
+                    Rule.__current_global_folds = last_folds
                     return translation
 
             for lookup in self.__lookup_strategies:
                 translation = lookup(defolded_strokes, folds, strokes, translator)
                 if translation is not None:
-                    Rule.__current_global_folds = None
+                    Rule.__current_global_folds = last_folds
                     return translation
 
             for alternative_rule in self.__alternative_rules:
                 translation = alternative_rule(defolded_strokes, translator)
                 if translation is not None:
-                    Rule.__current_global_folds = None
+                    Rule.__current_global_folds = last_folds
                     return translation
         
             Rule.__current_global_folds = last_folds
