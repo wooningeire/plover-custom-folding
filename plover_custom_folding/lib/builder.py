@@ -75,15 +75,25 @@ class _TranslationModificationGatherer:
         self,
         modify_translation: Callable[[str], str]=lambda translation: translation,
         modify_outline: Callable[[Outline], Outline]=lambda strokes: strokes,
+        check_additional_folds=True,
     ):
         self.__modify_outline = modify_outline
         self.__modify_translation = modify_translation
+        self.__check_additional_folds = check_additional_folds
 
 
     def __call__(self) -> LookupStrategy:
         @LookupStrategy.of
         def handler(defolded_strokes: Outline, folds: Outline, strokes: Outline, translator: Translator):
+            original_check_additional_folds = Rule.check_additional_folds
+            if not self.__check_additional_folds:
+                Rule.check_additional_folds = False
+
             foldless_translation = translator.lookup(self.__modify_outline(defolded_strokes))
+
+            if not self.__check_additional_folds:
+                Rule.check_additional_folds = original_check_additional_folds
+
             if foldless_translation is None:
                 return None
                         
@@ -104,8 +114,9 @@ class _TranslationModificationGatherer:
 
 
 class _OutlineModificationGatherer:
-    def __init__(self, modify_outline: Callable[[Outline], Outline]=lambda strokes: strokes):
+    def __init__(self, modify_outline: Callable[[Outline], Outline]=lambda strokes: strokes, check_additional_folds=True):
         self.__modify_outline = modify_outline
+        self.__check_additional_folds = check_additional_folds
 
 
     def __call__(self) -> LookupStrategy:
@@ -113,8 +124,7 @@ class _OutlineModificationGatherer:
 
 
     def __to_translation_modification_gatherer(self, modify_translation: Formatter=lambda translation: translation) -> _TranslationModificationGatherer:
-        return _TranslationModificationGatherer(modify_translation, self.__modify_outline)
-
+        return _TranslationModificationGatherer(modify_translation, self.__modify_outline, self.__check_additional_folds)
 
     def modify_translation(self, modify_translation: Formatter=lambda translation: translation) -> _TranslationModificationGatherer:
         """Translates the outline without any folds, and modifies the translation according to the callback."""
@@ -126,9 +136,12 @@ class _OutlineModificationGatherer:
     def suffix_translation(self, string: str) -> _TranslationModificationGatherer:
         return self.__to_translation_modification_gatherer().suffix_translation(string)
     
+    def check_additional_folds(self) -> _TranslationModificationGatherer:
+        return _OutlineModificationGatherer(self.__modify_outline, True).__to_translation_modification_gatherer()
+    
     def modify_outline(self, modify_outline: Callable[[Outline], Outline]) -> "_OutlineModificationGatherer":
         """Translates the outline without any folds, and modifies the translation according to the callback."""
-        return _OutlineModificationGatherer(lambda translation: modify_outline(self.__modify_outline(translation)))
+        return _OutlineModificationGatherer(lambda strokes: modify_outline(self.__modify_outline(strokes)), False)
     
     def prefix_outline(self, new_strokes_steno: str) -> "_OutlineModificationGatherer":
         new_strokes = tuple(Stroke.from_steno(stroke_steno) for stroke_steno in new_strokes_steno.split("/"))

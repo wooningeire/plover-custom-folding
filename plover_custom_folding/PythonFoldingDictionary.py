@@ -58,6 +58,9 @@ class PythonFoldingDictionary(StenoDictionary):
             raise Exception("tried looking up before dictionary was loaded")
         if translator_container.translator is None:
             raise Exception(f"EngineGetterExtension is not enabled; enable it in Plover config > `Plugins`")
+        
+        if not Rule.check_additional_folds:
+            return None
 
         strokes = tuple(Stroke.from_steno(steno) for steno in key)
         for rule in self.__rules:

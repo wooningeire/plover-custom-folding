@@ -219,6 +219,8 @@ class Rule:
         self.__alternative_rules = alternative_rules
 
 
+    check_additional_folds = True
+
     __current_folds: "tuple[Stroke, ...] | None" = None
     __unmatched_rules: "dict[Outline, set[Rule]]" = {}  # for memoization
     @classmethod
