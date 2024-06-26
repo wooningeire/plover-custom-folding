@@ -18,7 +18,7 @@ rules: list[Lookup] = [
     # E.g., `#KAP/TAL` => `{-|}capital` ("Capital")
     f.when(f.first_stroke.folds("#")).then(f.prefix_translation("{-|}")),
 
-    # Allows the `-R` key to be included in the first stroke to capitalize a word.
+    # Allows the `-R` key to be included in the last stroke to append "{^er}".
     # E.g., `SHEURPL` => `shim {^er}` ("shimmer")
     f.when(f.last_stroke.folds("-R")).then(f.suffix_translation(" {^er}")),
 
