@@ -6,8 +6,8 @@ from plover.steno import Stroke
 from plover.steno_dictionary import StenoDictionary
 
 from .EngineGetterExtension import translator_container
-
 from .lib.builder import Rule
+from .lib.util import exec_module_from_filepath
 
 
 class PythonFoldingDictionary(StenoDictionary):
@@ -19,25 +19,14 @@ class PythonFoldingDictionary(StenoDictionary):
 
         """(override)"""
         self._longest_key = 8
-
         self.__rules: "list[Rule] | None" = None
         self.__current_rules: set[Rule] = set()
 
     def _load(self, filepath: str):
-        # SourceFileLoader because spec_from_file_location only accepts files with a `py` file extension
-        loader = SourceFileLoader(filepath, filepath)
-        spec = importlib.util.spec_from_loader(filepath, loader)
-        if spec is None:
-            raise Exception(f"file @ {filepath} does not exist")
-        
-        module = importlib.util.module_from_spec(spec)
-        loader.exec_module(module)
-        
+        module = exec_module_from_filepath(filepath)
 
         self.__rules = module.rules
-
-        if hasattr(module, "LONGEST_KEY"):
-            self._longest_key = module.LONGEST_KEY
+        self._longest_key = getattr(module, "LONGEST_KEY", self._longest_key)
 
     def __getitem__(self, key: tuple[str]) -> str:
         result = self.__lookup(key)
@@ -57,7 +46,10 @@ class PythonFoldingDictionary(StenoDictionary):
         if self.__rules is None:
             raise Exception("tried looking up before dictionary was loaded")
         if translator_container.translator is None:
-            raise Exception(f"EngineGetterExtension is not enabled; enable it in Plover config > `Plugins`")
+            raise Exception("EngineGetterExtension is not enabled; enable it in Plover config > `Plugins`")
+
+        if len(key) > self._longest_key:
+            return None
         
         if not Rule.check_additional_folds:
             return None
