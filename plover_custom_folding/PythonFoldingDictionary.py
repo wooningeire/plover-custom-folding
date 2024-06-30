@@ -1,5 +1,3 @@
-import importlib.util
-from importlib.machinery import SourceFileLoader
 from typing import Optional
 
 from plover.steno import Stroke
@@ -28,21 +26,21 @@ class PythonFoldingDictionary(StenoDictionary):
         self.__rules = module.rules
         self._longest_key = getattr(module, "LONGEST_KEY", self._longest_key)
 
-    def __getitem__(self, key: tuple[str]) -> str:
+    def __getitem__(self, key: tuple[str, ...]) -> str:
         result = self.__lookup(key)
         if result is None:
             raise KeyError
         
         return result
 
-    def get(self, key: tuple[str], fallback=None) -> Optional[str]:
+    def get(self, key: tuple[str, ...], fallback=None) -> Optional[str]:
         result = self.__lookup(key)
         if result is None:
             return fallback
         
         return result
     
-    def __lookup(self, key: tuple[str]) -> Optional[str]:
+    def __lookup(self, key: tuple[str, ...]) -> Optional[str]:
         if self.__rules is None:
             raise Exception("tried looking up before dictionary was loaded")
         if translator_container.translator is None:

@@ -26,21 +26,21 @@ class PythonDictionary(StenoDictionary):
         self._longest_key = module.LONGEST_KEY
         self.__reverse_lookup = getattr(module, "reverse_lookup", self.__reverse_lookup)
 
-    def __getitem__(self, key: tuple[str]) -> str:
+    def __getitem__(self, key: tuple[str, ...]) -> str:
         result = self.__lookup_steno(key)
         if result is None:
             raise KeyError
         
         return result
 
-    def get(self, key: tuple[str], fallback=None) -> Optional[str]:
+    def get(self, key: tuple[str, ...], fallback=None) -> Optional[str]:
         result = self.__lookup_steno(key)
         if result is None:
             return fallback
         
         return result
     
-    def __lookup_steno(self, key: tuple[str]) -> Optional[str]:
+    def __lookup_steno(self, key: tuple[str, ...]) -> Optional[str]:
         if self.__lookup is None:
             raise Exception("tried looking up before dictionary was loaded")
     
