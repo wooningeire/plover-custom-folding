@@ -4,7 +4,8 @@ import plover.log
 
 from typing import Callable
 
-from .Rule import Case, Condition, Clause, Statement, Prerequisite, LookupStrategy, Rule, StrokeFilter, Outline, Formatter, empty_stroke
+from .Rule import Case, Condition, Clause, Statement, Prerequisite, LookupStrategy, Rule, StrokeFilter, Outline, Formatter
+from .util import empty_stroke
 
 
 class _ClauseBuilder:

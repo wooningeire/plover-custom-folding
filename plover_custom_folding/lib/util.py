@@ -1,6 +1,8 @@
 import importlib.util
 from importlib.machinery import SourceFileLoader
 
+from plover.steno import Stroke
+
 
 def exec_module_from_filepath(filepath: str):
     # SourceFileLoader because spec_from_file_location only accepts files with a `py` file extension
@@ -13,3 +15,6 @@ def exec_module_from_filepath(filepath: str):
     loader.exec_module(module)
 
     return module
+
+def empty_stroke() -> Stroke:
+    return Stroke.from_keys(())

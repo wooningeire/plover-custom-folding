@@ -1,8 +1,10 @@
+from typing import Callable, Generator, TypeVar
+
 from plover.steno import Stroke
 from plover.translation import Translator
 import plover.log
 
-from typing import Callable, Generator, TypeVar
+from .util import empty_stroke
 
 
 T = TypeVar("T")
@@ -21,9 +23,6 @@ def _toggle_substroke(stroke: Stroke, substroke: Stroke):
     
 def _strokes_overlap(a: Stroke, b: Stroke):
     return ~(~a | ~b) != 0  # De Morgan's Law
-
-def empty_stroke() -> Stroke:
-    return Stroke.from_keys(())
 
 def _create_stroke_index_mapping(strokes: Outline):
     return {
