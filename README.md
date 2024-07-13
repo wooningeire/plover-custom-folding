@@ -62,7 +62,7 @@ rules: list[f.Lookup] = [
     # but with the stroke `TKEUS` behind it, and then again with the stroke `TKEU` behind it and `S` added to the first
     # stroke, and then just the de-folded stroke with "{dis^}" prefixed to the resulting translation.
     # E.g., `STKEPL/TPHAEUT` => `disseminate`
-    # E.g., `STKPEHRAOEF` => `{dis^} belief` ("disbelief")
+    # E.g., `STKPWHRAOEF` => `{dis^} belief` ("disbelief")
     f.when(f.first_stroke.folds("STK")).then(
         f.prefix_outline("TKEUS/"),
         f.prefix_outline("TKEU/S"),
