@@ -108,7 +108,7 @@ rules: list[f.Lookup] = [
 
 ## Caveats
 Currently, the way this plugin detects whether an outline folds a stroke works slightly differently to the way Plover does so by default. In particular, this plugin will give precedence to the longest outline that is found to satisfy a rule even if the latest stroke is explicitly defined, whereas Plover by default will prefer explicit entries over folds. This makes certain multistroke entries more predictable:
-* `SRAL/TKAEUGT` → `validating` (original: `val dating`; conflict occurs because `TKAEUGT` → `dating` is explicitly defined in main.json)
+* `SRAL/TKAEUGT` → `validate {^ing}` (original: `val dating`; conflict occurs because `TKAEUGT` → `dating` is explicitly defined in main.json)
 
 … but others may have unexpected results:
 * `SKP/HREUD` → `and I will {^ed}` (original: `and lid`; conflict occurs because of misstroke entry `SKP/HREU` → `and I will` in main.json)
