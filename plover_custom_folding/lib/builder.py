@@ -152,120 +152,99 @@ class _OutlineModificationGatherer:
         return self.modify_outline(lambda strokes: strokes[:-1] + (new_strokes[0] + strokes[-1],) + new_strokes[1:])
 
 
-class FoldingRuleBuildUtils:
-    @staticmethod
-    def when(*builders: "Callable[[], Statement | Clause]") -> _LookupStrategyGatherer:
-        """Gathers statements at least one of which must be true for this rule to be used."""
-        return _LookupStrategyGatherer(Prerequisite(tuple(create() for create in builders)))
+def when(*builders: "Callable[[], Statement | Clause]") -> _LookupStrategyGatherer:
+    """Gathers statements at least one of which must be true for this rule to be used."""
+    return _LookupStrategyGatherer(Prerequisite(tuple(create() for create in builders)))
     
-    @staticmethod
-    def when_all(*builders: "Callable[[], Statement | Clause]") -> _LookupStrategyGatherer:
-        """Gathers statements all of which must be true for this rule to be used."""
-        return f.when(f.all(*builders))
+def when_all(*builders: "Callable[[], Statement | Clause]") -> _LookupStrategyGatherer:
+    """Gathers statements all of which must be true for this rule to be used."""
+    return when(all_rules(*builders))
 
-    first_stroke: _ClauseBuilder = _ClauseBuilder(lambda strokes: (strokes[0],))
-    last_stroke: _ClauseBuilder = _ClauseBuilder(lambda strokes: (strokes[-1],))
-    all_strokes: _ClauseBuilder = _ClauseBuilder(lambda strokes: strokes)
-    @staticmethod
-    def nth_stroke(index: int):
-        return _ClauseBuilder(lambda strokes: (strokes[index],))
-    
-    @staticmethod
-    def filtered_strokes(stroke_filter: StrokeFilter):
-        return _ClauseBuilder(stroke_filter)
-    
+first_stroke: _ClauseBuilder = _ClauseBuilder(lambda strokes: (strokes[0],))
+last_stroke: _ClauseBuilder = _ClauseBuilder(lambda strokes: (strokes[-1],))
+all_strokes: _ClauseBuilder = _ClauseBuilder(lambda strokes: strokes)
+def nth_stroke(index: int):
+    return _ClauseBuilder(lambda strokes: (strokes[index],))
 
-    @staticmethod
-    def all(*builders: "Callable[[], Statement | Clause]"):
-        return lambda: Statement(True, tuple(create() for create in builders))
+def filtered_strokes(stroke_filter: StrokeFilter):
+    return _ClauseBuilder(stroke_filter)
 
-    @staticmethod
-    def any_single(*builders: "Callable[[], Statement | Clause]"):
-        return lambda: Statement(False, tuple(create() for create in builders))
-    
 
-    @staticmethod
-    def modify_translation(modify_translation: Formatter=lambda translation: translation) -> _TranslationModificationGatherer:
-        """Translates the outline without any folds, and modifies the translation according to the callback."""
-        return _TranslationModificationGatherer(modify_translation)
-    
-    @staticmethod
-    def prefix_translation(string: str) -> _TranslationModificationGatherer:
-        return _TranslationModificationGatherer().prefix_translation(string)
+def all_rules(*builders: "Callable[[], Statement | Clause]"):
+    return lambda: Statement(True, tuple(create() for create in builders))
+
+def any_single_rule(*builders: "Callable[[], Statement | Clause]"):
+    return lambda: Statement(False, tuple(create() for create in builders))
+
+
+def modify_translation(modify_translation: Formatter=lambda translation: translation) -> _TranslationModificationGatherer:
+    """Translates the outline without any folds, and modifies the translation according to the callback."""
+    return _TranslationModificationGatherer(modify_translation)
+
+def prefix_translation(string: str) -> _TranslationModificationGatherer:
+    return _TranslationModificationGatherer().prefix_translation(string)
+
+def suffix_translation(string: str) -> _TranslationModificationGatherer:
+    return _TranslationModificationGatherer().suffix_translation(string)
+
+def modify_outline(modify_outline: Callable[[Outline], Outline]) -> _OutlineModificationGatherer:
+    """Translates the outline without any folds, and modifies the outline according to the callback."""
+    return _OutlineModificationGatherer(modify_outline)
+
+def prefix_outline(new_strokes_steno: str) -> _OutlineModificationGatherer:
+    return _OutlineModificationGatherer().prefix_outline(new_strokes_steno)
+
+def suffix_outline(new_strokes_steno: str) -> _OutlineModificationGatherer:
+    return _OutlineModificationGatherer().suffix_outline(new_strokes_steno)
+
+def group_rules(*rules: Rule) -> Rule:
+    return Rule(Prerequisite(()), (), rules)
+
+
+def unfold_suffix():
+    """Default folding behavior. Removes the fold from the final stroke and appends the folded chord as a new
+    stroke, using the chord's dictionary entry."""
+
+    @LookupStrategy.of
+    def handler(defolded_strokes: Outline, folds: Outline, strokes: Outline, translator: Translator):
+        foldless_translation = translator.lookup(defolded_strokes)
+        if foldless_translation is None:
+            return None
         
-    @staticmethod
-    def suffix_translation(string: str) -> _TranslationModificationGatherer:
-        return _TranslationModificationGatherer().suffix_translation(string)
-    
-    @staticmethod
-    def modify_outline(modify_outline: Callable[[Outline], Outline]) -> _OutlineModificationGatherer:
-        """Translates the outline without any folds, and modifies the outline according to the callback."""
-        return _OutlineModificationGatherer(modify_outline)
-    
-    @staticmethod
-    def prefix_outline(new_strokes_steno: str) -> _OutlineModificationGatherer:
-        return _OutlineModificationGatherer().prefix_outline(new_strokes_steno)
+        fold_chord_translation = translator.lookup((folds[-1],))
+        if fold_chord_translation is None:
+            return None
         
-    @staticmethod
-    def suffix_outline(new_strokes_steno: str) -> _OutlineModificationGatherer:
-        return _OutlineModificationGatherer().suffix_outline(new_strokes_steno)
-    
-    @staticmethod
-    def group_rules(*rules: Rule) -> Rule:
-        return Rule(Prerequisite(()), (), rules)
-    
-    
-    @staticmethod
-    def unfold_suffix():
-        """Default folding behavior. Removes the fold from the final stroke and appends the folded chord as a new
-        stroke, using the chord's dictionary entry."""
+        return f"{foldless_translation} {fold_chord_translation}"
 
-        @LookupStrategy.of
-        def handler(defolded_strokes: Outline, folds: Outline, strokes: Outline, translator: Translator):
-            foldless_translation = translator.lookup(defolded_strokes)
-            if foldless_translation is None:
-                return None
-            
-            fold_chord_translation = translator.lookup((folds[-1],))
-            if fold_chord_translation is None:
-                return None
-            
-            return f"{foldless_translation} {fold_chord_translation}"
+    return handler
 
-        return handler
-    
-    @staticmethod
-    def unfold_prefix():
-        @LookupStrategy.of
-        def handler(defolded_strokes: Outline, folds: Outline, strokes: Outline, translator: Translator):
-            foldless_translation = translator.lookup(defolded_strokes)
-            if foldless_translation is None:
-                return None
-            
-            fold_chord_translation = translator.lookup((folds[0],))
-            if fold_chord_translation is None:
-                return None
+def unfold_prefix():
+    @LookupStrategy.of
+    def handler(defolded_strokes: Outline, folds: Outline, strokes: Outline, translator: Translator):
+        foldless_translation = translator.lookup(defolded_strokes)
+        if foldless_translation is None:
+            return None
         
-            return f"{fold_chord_translation} {foldless_translation}"
-        
-        return handler
+        fold_chord_translation = translator.lookup((folds[0],))
+        if fold_chord_translation is None:
+            return None
     
-
-    @staticmethod
-    def use_defolded_translation():
-        @LookupStrategy.of
-        def handler(defolded_strokes: Outline, folds: Outline, strokes: Outline, translator: Translator):
-            return translator.lookup(defolded_strokes)
-        
-        return handler
+        return f"{fold_chord_translation} {foldless_translation}"
     
+    return handler
 
-    @staticmethod
-    def default_system_rules():
-        """Plover's default folding rules, depend on the current system."""
 
-        from plover.system import SUFFIX_KEYS # type: ignore
+def use_defolded_translation():
+    @LookupStrategy.of
+    def handler(defolded_strokes: Outline, folds: Outline, strokes: Outline, translator: Translator):
+        return translator.lookup(defolded_strokes)
+    
+    return handler
 
-        return f.when(f.last_stroke.folds(*SUFFIX_KEYS)).then(f.unfold_suffix)
+def default_system_rules():
+    """Plover's default folding rules, depend on the current system."""
 
-f = FoldingRuleBuildUtils
+    from plover.system import SUFFIX_KEYS # type: ignore
+
+    return when(last_stroke.folds(*SUFFIX_KEYS)).then(unfold_suffix)

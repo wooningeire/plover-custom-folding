@@ -10,10 +10,10 @@ To avoid overwriting explicitly defined entries, folding dictionaries should mos
 ```py
 # Example of a Python folding dictionary with some basic rules. File extension is `fold-py`.
 
-from plover_custom_folding import f, Lookup
+import plover_custom_folding as f
 
 # Required. A list of rules or lookup functions of type `Callable[[tuple[Stroke, ...], Translator], str]`.
-rules: list[Lookup] = [
+rules: list[f.Lookup] = [
     # Allows the `#` key to be included in the first stroke to capitalize a word.
     # E.g., `#KAP/TAL` => `{-|}capital` ("Capital")
     f.when(f.first_stroke.folds("#")).then(f.prefix_translation("{-|}")),
@@ -38,9 +38,9 @@ LONGEST_KEY: int = 8
 ```py
 # Dictionary with some more complex rules. This dictionary requires a system with the `^` and `+` keys.
 
-from plover_custom_folding import f, Lookup
+import plover_custom_folding as f 
 
-rules: list[Lookup] = [
+rules: list[f.Lookup] = [
     # Note: the rules are grouped in a specific order. The higher rules will take precedence over (be checked earlier
     # than) lower ones, but modifications to the outline/translation occur in reverse order to the order in which each
     # rule is found to be satisfied.
@@ -81,7 +81,7 @@ rules: list[Lookup] = [
 ]
 ```
 
-Note that separate folding rules defined in a folding dictionary can be combined, e.g., `#^+WAUFPGS` with the above rules translates to `{^~|-^}{-|}watch {^ings}` ("-Watchings" as a suffix).
+Note that separate folding rules defined in a folding dictionary can be combined, e.g., `#^+WAUFPGS` with the above rules translates to `{^~|-^}{-|}watch {^ings}` ("-Watchings" as a suffix). The order in which the rules modify the translation depends on the order in which they are specified in the list; e.g., since the `#` rule is specified first, it applies the innermost modification to the translation.
 
 ```py
 # If desired, we can manually define our own custom functions as rules.
@@ -89,7 +89,7 @@ Note that separate folding rules defined in a folding dictionary can be combined
 from plover.steno import Stroke
 from plover.translation import Translator
 
-from plover_custom_folding import f, Lookup
+import plover_custom_folding as f
 
 def _lookup(strokes: tuple[Stroke, ...], translator: Translator):
     if "#" not in strokes[0].keys():
@@ -101,7 +101,16 @@ def _lookup(strokes: tuple[Stroke, ...], translator: Translator):
 
     return f"{{-|}}{translation}"
 
-rules: list[Lookup] = [
+rules: list[f.Lookup] = [
     _lookup,
 ]
 ```
+
+## Caveats
+Currently, the way this plugin detects whether an outline folds a stroke works slightly differently to the way Plover does so by default. In particular, this plugin will give precedence to the longest outline that is found to satisfy a rule even if the latest stroke is explicitly defined, whereas Plover by default will prefer explicit entries over folds. This makes certain multistroke entries more predictable:
+* `SRAL/TKAEUGT` → `validating` (original: `val dating`; conflict occurs because `TKAEUGT` → `dating` is explicitly defined in main.json)
+
+… but others may have unexpected results:
+* `SKP/HREUD` → `and I will {^ed}` (original: `and lid`; conflict occurs because of misstroke entry `SKP/HREU` → `and I will` in main.json)
+
+This may be made into an option that can be applied to specific rules in a future version.
