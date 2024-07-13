@@ -28,7 +28,7 @@ rules: list[f.Lookup] = [
 
     # Allows `-G` to be included and `*` to be toggled in the last stroke to append "{^in'}".
     # We can use `unfold_suffix` because `*G` is defined as "{^in'}" in main.json already.
-    f.when(f.last_stroke.folds("-G").folds_toggled("*")).then(f.unfold_suffix),
+    f.when(f.last_stroke.folds("-G").toggles("*")).then(f.unfold_suffix),
 ]
 
 # Optional. The maximum length of the outline to check these folding rules for.
@@ -77,7 +77,7 @@ rules: list[f.Lookup] = [
     # See above.
     f.when(f.last_stroke.folds("-R")).then(f.suffix_translation(" {^er}")),
     f.when(f.last_stroke.folds("-GS", "-GZ")).then(f.suffix_translation(" {^ings}")),
-    f.when(f.last_stroke.folds("-G").folds_toggled("*")).then(f.unfold_suffix),
+    f.when(f.last_stroke.folds("-G").toggles("*")).then(f.unfold_suffix),
 ]
 ```
 
