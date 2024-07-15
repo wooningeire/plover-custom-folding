@@ -81,7 +81,7 @@ rules: list[f.Lookup] = [
 ]
 ```
 
-Note that separate folding rules defined in a folding dictionary can be combined, e.g., `#^+WAUFPGS` with the above rules translates to `{^~|-^}{-|}watch {^ings}` ("-Watchings" as a suffix). The order in which the rules modify the translation depends on the order in which they are specified in the list; e.g., since the `#` rule is specified first, it applies the innermost modification to the translation.
+Note that separate folding rules defined in a folding dictionary can be combined, e.g., `#^+WAUFPGS` with the above rules translates to `{-|}{^~|-^}watch {^ings}` ("-Watchings" as a suffix). The order in which the rules modify the translation depends on the order in which they are specified in the list; e.g., since the `#` rule is specified first, it applies the outermost modification to the translation.
 
 ```py
 # If desired, we can manually define our own custom functions as rules.
