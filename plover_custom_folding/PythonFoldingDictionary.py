@@ -11,6 +11,7 @@ from .lib.util import exec_module_from_filepath
 class PythonFoldingDictionary(StenoDictionary):
     readonly = True
 
+    __checking_shorter_outlines = False  # TODO should this be a class-level attribute?
 
     def __init__(self):
         super().__init__()
@@ -51,8 +52,23 @@ class PythonFoldingDictionary(StenoDictionary):
         
         if not Rule.check_additional_folds:
             return None
+        
+        if PythonFoldingDictionary.__checking_shorter_outlines:
+            return None
 
         strokes = tuple(Stroke.from_steno(steno) for steno in key)
+
+
+        # Check shorter outlines before trying to defold (mimic default Plover behavior)
+        PythonFoldingDictionary.__checking_shorter_outlines = True
+        for start_index in range(len(strokes) - 1, 0, -1):
+            shorter_translation = translator_container.translator.lookup(strokes[start_index:])
+            if shorter_translation is not None:
+                PythonFoldingDictionary.__checking_shorter_outlines = False
+                return None
+        PythonFoldingDictionary.__checking_shorter_outlines = False
+            
+
         for rule in self.__rules:
             # Prevent a rule from looking up itself
             if rule in self.__current_rules:

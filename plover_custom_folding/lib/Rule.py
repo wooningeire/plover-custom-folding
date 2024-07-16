@@ -231,7 +231,7 @@ class Rule:
         if strokes in Rule.__unmatched_rules and self in Rule.__unmatched_rules[strokes]:
             return None
 
-        if len(strokes[0].keys()) == 0:
+        if len(strokes[0]) == 0:
             return None
 
         for defolded_strokes, folds in self.__prerequisite.satisfied_folds(strokes):
