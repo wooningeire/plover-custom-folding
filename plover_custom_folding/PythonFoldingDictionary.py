@@ -11,7 +11,9 @@ from .lib.util import exec_module_from_filepath
 class PythonFoldingDictionary(StenoDictionary):
     readonly = True
 
-    __checking_shorter_outlines = False  # TODO should this be a class-level attribute?
+    __checking_shorter_outlines = False
+    __shorter_outline_found = False
+    __checked_shorter_outlines = False
 
     def __init__(self):
         super().__init__()
@@ -46,28 +48,38 @@ class PythonFoldingDictionary(StenoDictionary):
             raise Exception("tried looking up before dictionary was loaded")
         if translator_container.translator is None:
             raise Exception("EngineGetterExtension is not enabled; enable it in Plover config > `Plugins`")
-
-        if len(key) > self._longest_key:
-            return None
         
         if not Rule.check_additional_folds:
             return None
         
         if PythonFoldingDictionary.__checking_shorter_outlines:
             return None
+        
+        if len(key) == 1:
+            PythonFoldingDictionary.__shorter_outline_found = False
+        elif PythonFoldingDictionary.__shorter_outline_found:
+            return None
 
         strokes = tuple(Stroke.from_steno(steno) for steno in key)
 
 
         # Check shorter outlines before trying to defold (mimic default Plover behavior)
-        PythonFoldingDictionary.__checking_shorter_outlines = True
-        for start_index in range(len(strokes) - 1, 0, -1):
-            shorter_translation = translator_container.translator.lookup(strokes[start_index:])
-            if shorter_translation is not None:
+        if not PythonFoldingDictionary.__checked_shorter_outlines:
+            PythonFoldingDictionary.__checking_shorter_outlines = True
+            for start_index in range(len(strokes) - 1, 0, -1):
+                shorter_translation = translator_container.translator.lookup(strokes[start_index:])
+                if shorter_translation is None: continue
+
+                PythonFoldingDictionary.__shorter_outline_found = True
                 PythonFoldingDictionary.__checking_shorter_outlines = False
+                PythonFoldingDictionary.__checked_shorter_outlines = True
                 return None
-        PythonFoldingDictionary.__checking_shorter_outlines = False
+            PythonFoldingDictionary.__checking_shorter_outlines = False
+            PythonFoldingDictionary.__checked_shorter_outlines = True
             
+        if len(key) == 1:
+            PythonFoldingDictionary.__checked_shorter_outlines = False
+
 
         for rule in self.__rules:
             # Prevent a rule from looking up itself
