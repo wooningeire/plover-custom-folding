@@ -12,7 +12,7 @@ class PythonFoldingDictionary(StenoDictionary):
     readonly = True
 
     __checking_shorter_outlines = False
-    __shorter_outline_found = False
+    # __shorter_outline_found = False
     __checked_shorter_outlines = False
 
     def __init__(self):
@@ -55,10 +55,8 @@ class PythonFoldingDictionary(StenoDictionary):
         if PythonFoldingDictionary.__checking_shorter_outlines:
             return None
         
-        if len(key) == 1:
-            PythonFoldingDictionary.__shorter_outline_found = False
-        elif PythonFoldingDictionary.__shorter_outline_found:
-            return None
+        # if len(key) == 1:
+        #     PythonFoldingDictionary.__shorter_outline_found = False
 
         strokes = tuple(Stroke.from_steno(steno) for steno in key)
 
@@ -70,15 +68,18 @@ class PythonFoldingDictionary(StenoDictionary):
                 shorter_translation = translator_container.translator.lookup(strokes[start_index:])
                 if shorter_translation is None: continue
 
-                PythonFoldingDictionary.__shorter_outline_found = True
+                # PythonFoldingDictionary.__shorter_outline_found = True
                 PythonFoldingDictionary.__checking_shorter_outlines = False
-                PythonFoldingDictionary.__checked_shorter_outlines = True
+                # PythonFoldingDictionary.__checked_shorter_outlines = True
                 return None
             PythonFoldingDictionary.__checking_shorter_outlines = False
-            PythonFoldingDictionary.__checked_shorter_outlines = True
+            # PythonFoldingDictionary.__checked_shorter_outlines = True
             
-        if len(key) == 1:
-            PythonFoldingDictionary.__checked_shorter_outlines = False
+        # elif PythonFoldingDictionary.__shorter_outline_found:
+        #     return None
+
+        # if len(key) == 1:
+        #     PythonFoldingDictionary.__checked_shorter_outlines = False
 
 
         for rule in self.__rules:
