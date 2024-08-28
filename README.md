@@ -16,7 +16,7 @@ import plover_custom_folding as f
 rules: list[f.Lookup] = [
     # Allows the `#` key to be included in the first stroke to capitalize a word.
     # E.g., `#KAP/TAL` => `{-|}capital` ("Capital")
-    f.when(f.first_stroke.folds("#")).then(f.prefix_translation("{-|}")),
+    f.when(f.first_stroke.folds("#")).then(f.prefix_translation("{-|}")).preferring_folds(),
 
     # Allows the `-R` key to be included in the last stroke to append "{^er}".
     # E.g., `SHEURPL` => `shim {^er}` ("shimmer")
@@ -55,7 +55,7 @@ rules: list[f.Lookup] = [
         ),
 
     # See above.
-    f.when(f.first_stroke.folds("#")).then(f.prefix_translation("{-|}")),
+    f.when(f.first_stroke.folds("#")).then(f.prefix_translation("{-|}")).preferring_folds(),
 
 
     # Allows the `STK` substroke to be included in the first stroke and if so, we then lookup the de-folded outline
@@ -106,11 +106,15 @@ rules: list[f.Lookup] = [
 ]
 ```
 
-<!--
-## Caveats
-Currently, the way this plugin detects whether an outline folds a stroke works slightly differently to the way Plover does so by default. In particular, this plugin will give precedence to the longest outline that is found to satisfy a rule even if the latest stroke is explicitly defined, whereas Plover by default will prefer explicit entries over folds. This makes certain multistroke entries more predictable:
+
+## Methods
+TODO.
+
+### `Rule.preferring_folds(self)`
+Using built-in folding, Plover will give precedence to a shorter outline that is explicitly defined as opposed to a longer outline that is found using a fold. This plugin matches this behavior by default, but `preferring_folds` overrides this behavior, which may come in handy especially for prefix folds.
+
+This makes certain multistroke entries more predictable:
 * `SRAL/TKAEUGT` → `validate {^ing}` (original: `val dating`; conflict occurs because `TKAEUGT` → `dating` is explicitly defined in main.json)
 
 … but others may have unexpected results:
 * `SKP/HREUD` → `and I will {^ed}` (original: `and lid`; conflict occurs because of misstroke entry `SKP/HREU` → `and I will` in main.json)
--->

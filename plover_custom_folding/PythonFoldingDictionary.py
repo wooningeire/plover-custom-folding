@@ -60,6 +60,7 @@ class PythonFoldingDictionary(StenoDictionary):
 
         strokes = tuple(Stroke.from_steno(steno) for steno in key)
 
+        shorter_outline_found = False
 
         # Check shorter outlines before trying to defold (mimic default Plover behavior)
         if not PythonFoldingDictionary.__checked_shorter_outlines:
@@ -71,7 +72,7 @@ class PythonFoldingDictionary(StenoDictionary):
                 # PythonFoldingDictionary.__shorter_outline_found = True
                 PythonFoldingDictionary.__checking_shorter_outlines = False
                 # PythonFoldingDictionary.__checked_shorter_outlines = True
-                return None
+                shorter_outline_found = True
             PythonFoldingDictionary.__checking_shorter_outlines = False
             # PythonFoldingDictionary.__checked_shorter_outlines = True
             
@@ -89,7 +90,7 @@ class PythonFoldingDictionary(StenoDictionary):
             
             self.__current_rules.add(rule)
 
-            translation = rule(strokes, translator_container.translator)
+            translation = rule(strokes, translator_container.translator, shorter_outline_found)
             
             self.__current_rules.remove(rule)
             

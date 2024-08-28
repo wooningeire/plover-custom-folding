@@ -212,14 +212,17 @@ class Rule:
         lookup_strategies: tuple[LookupStrategy, ...],
         additional_rules: "tuple[Rule, ...]"=(),
         alternative_rules: "tuple[Rule, ...]"=(),
+        allow_shorter_outline: bool=False,
     ):
         self.__prerequisite = prerequisite
         self.__lookup_strategies = lookup_strategies
         self.__additional_rules = additional_rules
         self.__alternative_rules = alternative_rules
+        self.__allow_shorter_outline = allow_shorter_outline
 
 
     check_additional_folds = True
+    shorter_outline_found = False
 
     __current_folds: "tuple[Stroke, ...] | None" = None
     __unmatched_rules: "dict[Outline, set[Rule]]" = {}  # for memoization
@@ -227,11 +230,14 @@ class Rule:
     def clear_unmatched_rules(cls):
         cls.__unmatched_rules.clear()
 
-    def __call__(self, strokes: Outline, translator: Translator) -> "str | None":
+    def __call__(self, strokes: Outline, translator: Translator, shorter_outline_found: bool) -> "str | None":
         if strokes in Rule.__unmatched_rules and self in Rule.__unmatched_rules[strokes]:
             return None
 
         if len(strokes[0]) == 0:
+            return None
+        
+        if shorter_outline_found and not self.__allow_shorter_outline:
             return None
 
         for defolded_strokes, folds in self.__prerequisite.satisfied_folds(strokes):
@@ -262,7 +268,7 @@ class Rule:
 
             # Check additional rules before the main rule
             for additional_rule in self.__additional_rules:
-                translation = additional_rule(defolded_strokes, translator)
+                translation = additional_rule(defolded_strokes, translator, shorter_outline_found)
                 if translation is not None:
                     Rule.__current_folds = last_folds
                     return translation
@@ -274,7 +280,7 @@ class Rule:
                     return translation
 
             for alternative_rule in self.__alternative_rules:
-                translation = alternative_rule(defolded_strokes, translator)
+                translation = alternative_rule(defolded_strokes, translator, shorter_outline_found)
                 if translation is not None:
                     Rule.__current_folds = last_folds
                     return translation
@@ -291,7 +297,10 @@ class Rule:
         return None
     
     def or_also(self, *alternative_rules: "Rule"):
-        return Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules, self.__alternative_rules + alternative_rules)
+        return Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules, self.__alternative_rules + alternative_rules, self.__allow_shorter_outline)
     
     def unless_also(self, *additional_rules: "Rule"):
-        return Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules + additional_rules, self.__alternative_rules)
+        return Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules + additional_rules, self.__alternative_rules, self.__allow_shorter_outline)
+    
+    def preferring_folds(self):
+        return Rule(self.__prerequisite, self.__lookup_strategies, self.__additional_rules, self.__alternative_rules, True)
