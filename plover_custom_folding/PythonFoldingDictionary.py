@@ -3,17 +3,13 @@ from typing import Optional
 from plover.steno import Stroke
 from plover.steno_dictionary import StenoDictionary
 
-from .EngineGetterExtension import translator_container
+from .EngineGetterExtension import translator_container, TranslatorContainer
 from .lib.builder import Rule
 from .lib.util import exec_module_from_filepath
 
 
 class PythonFoldingDictionary(StenoDictionary):
     readonly = True
-
-    __checking_shorter_outlines = False
-    # __shorter_outline_found = False
-    __checked_shorter_outlines = False
 
     def __init__(self):
         super().__init__()
@@ -52,35 +48,13 @@ class PythonFoldingDictionary(StenoDictionary):
         if not Rule.check_additional_folds:
             return None
         
-        if PythonFoldingDictionary.__checking_shorter_outlines:
+        if TranslatorContainer.checking_shorter_outlines:
             return None
         
-        # if len(key) == 1:
-        #     PythonFoldingDictionary.__shorter_outline_found = False
-
         strokes = tuple(Stroke.from_steno(steno) for steno in key)
 
-        shorter_outline_found = False
-
-        # Check shorter outlines before trying to defold (mimic default Plover behavior)
-        if not PythonFoldingDictionary.__checked_shorter_outlines:
-            PythonFoldingDictionary.__checking_shorter_outlines = True
-            for start_index in range(len(strokes) - 1, 0, -1):
-                shorter_translation = translator_container.translator.lookup(strokes[start_index:])
-                if shorter_translation is None: continue
-
-                # PythonFoldingDictionary.__shorter_outline_found = True
-                PythonFoldingDictionary.__checking_shorter_outlines = False
-                # PythonFoldingDictionary.__checked_shorter_outlines = True
-                shorter_outline_found = True
-            PythonFoldingDictionary.__checking_shorter_outlines = False
-            # PythonFoldingDictionary.__checked_shorter_outlines = True
-            
-        # elif PythonFoldingDictionary.__shorter_outline_found:
-        #     return None
-
-        # if len(key) == 1:
-        #     PythonFoldingDictionary.__checked_shorter_outlines = False
+        shorter_outline_length = translator_container.check_shorter_outlines(self._longest_key)
+        shorter_outline_found = shorter_outline_length != -1 and shorter_outline_length < len(strokes)
 
 
         for rule in self.__rules:
