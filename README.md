@@ -4,6 +4,10 @@ Plugin that lets users use Python dictionaries to define custom folding rules.
 After installing, the extension `EngineGetterExtension` must be enabled from Plover's config > `Plugins` in order for folding dictionaries to work.
 
 
+## Setup
+This plugin is currently not available from Plover's Plugins Manager. [Instructions are available on the Plover wiki](https://plover.wiki/index.php/Plugins#Find_the_plugin_on_PyPI_or_as_a_git_repo) on how to install this plugin from PyPI or this Git repository.
+
+
 ## Dictionary examples
 To avoid overwriting explicitly defined entries, folding dictionaries should most likely be placed at the bottom of the dictionary list.
 
